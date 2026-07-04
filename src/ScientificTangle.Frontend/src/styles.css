@@ -973,49 +973,66 @@ path {
   fill: #111318;
 }
 
-.graph-edge line {
+.graph-edge {
+  transition: opacity 150ms ease;
+}
+
+.graph-edge-hit {
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+
+.graph-edge-line {
   stroke: rgba(255, 255, 255, 0.26);
   stroke-width: 1.5;
+  pointer-events: none;
+  transition:
+    stroke 150ms ease,
+    stroke-width 150ms ease;
 }
 
 .graph-edge text {
   fill: rgba(236, 236, 241, 0.46);
   font-size: 11px;
   pointer-events: none;
+  transition: fill 150ms ease;
 }
 
-.graph-edge.is-active line {
-  stroke: rgba(255, 255, 255, 0.64);
+.graph-edge.is-active .graph-edge-line {
+  stroke: rgba(255, 255, 255, 0.82);
   stroke-width: 2.2;
+}
+
+.graph-edge.is-active text {
+  fill: rgba(236, 236, 241, 0.78);
+}
+
+.graph-edge.is-dimmed,
+.graph-node.is-dimmed {
+  opacity: 0.3;
 }
 
 .graph-node {
   color: var(--node-color);
   cursor: pointer;
+  transition: opacity 150ms ease;
 }
 
-.graph-node circle {
+.graph-node rect {
   fill: color-mix(in srgb, var(--node-color) 18%, #111318);
   stroke: var(--node-color);
   stroke-width: 2;
-  transition:
-    filter 150ms ease,
-    stroke-width 150ms ease,
-    transform 150ms ease;
 }
 
 .graph-node text {
   fill: #f8fafc;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 650;
+  line-height: 1.2;
   pointer-events: none;
   text-anchor: middle;
-}
-
-.graph-node.is-active circle,
-.graph-node:hover circle {
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--node-color) 60%, transparent));
-  stroke-width: 3;
+  dominant-baseline: middle;
 }
 
 .graph-tooltip {

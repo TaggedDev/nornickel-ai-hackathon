@@ -147,33 +147,17 @@ const edgeTypeLabels: Record<string, string> = {
   contradicts: "противоречит",
 };
 
-const graphNodeLayout: Record<string, { x: number; y: number }> = {
-  n1: { x: 420, y: 235 },
-  n2: { x: 205, y: 170 },
-  n3: { x: 210, y: 355 },
-  n4: { x: 650, y: 170 },
-  n5: { x: 650, y: 355 },
-};
-
 function buildKnowledgeContextFromApiResponse(context: ChatKnowledgeContextResponse): ChatKnowledgeContext {
-  const nodes = context.graph.nodes.map((node, index) => {
-    const fallbackAngle = (Math.PI * 2 * index) / Math.max(context.graph.nodes.length, 1);
-    const layout = graphNodeLayout[node.id] ?? {
-      x: 420 + Math.cos(fallbackAngle) * 230,
-      y: 235 + Math.sin(fallbackAngle) * 135,
-    };
-
-    return {
+  const nodes = context.graph.nodes.map((node) => ({
       id: node.id,
       type: node.type as KnowledgeGraphNode["type"],
       label: node.label,
       canonicalName: node.canonicalName,
       aliases: node.aliases,
       properties: node.properties,
-      x: layout.x,
-      y: layout.y,
-    };
-  });
+      x: 0,
+      y: 0,
+    }));
 
   return {
     graph: {
@@ -537,6 +521,84 @@ function getNodeColor(type: KnowledgeGraphNode["type"]) {
   return nodeTypeColors[type] ?? "#d1d5db";
 }
 
+function wrapGraphNodeLabel(label: string, maxLineLength = 16, maxLines = 3) {
+  const words = label.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+
+  for (const word of words) {
+    const currentLine = lines[lines.length - 1] ?? "";
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+
+    if (!currentLine || nextLine.length <= maxLineLength) {
+      lines[lines.length - 1] = nextLine;
+      continue;
+    }
+
+    if (lines.length >= maxLines) {
+      lines[lines.length - 1] = `${trimGraphNodeLine(lines[lines.length - 1], maxLineLength - 1)}...`;
+      break;
+    }
+
+    lines.push(trimGraphNodeLine(word, maxLineLength));
+  }
+
+  return lines.length > 0 ? lines.slice(0, maxLines) : [label];
+}
+
+function trimGraphNodeLine(line: string, maxLength: number) {
+  return line.length <= maxLength ? line : `${line.slice(0, Math.max(1, maxLength - 1))}...`;
+}
+
+function layoutGraphNodes(graph: ChatKnowledgeContext["graph"], fullscreen: boolean) {
+  const width = 840;
+  const height = 472.5;
+  const nodeWidth = fullscreen ? 150 : 126;
+  const nodeHeight = fullscreen ? 64 : 56;
+  const minColumnGap = fullscreen ? 26 : 24;
+  const minRowGap = fullscreen ? 28 : 24;
+  const horizontalPadding = fullscreen ? 58 : 48;
+  const verticalPadding = fullscreen ? 48 : 42;
+  const columnStep = nodeWidth + minColumnGap;
+  const rowStep = nodeHeight + minRowGap;
+  const maxColumns = Math.max(1, Math.floor((width - horizontalPadding * 2 + minColumnGap) / columnStep));
+  const columns = Math.max(1, Math.min(maxColumns, Math.ceil(Math.sqrt(graph.nodes.length * 1.55))));
+  const rows = Math.max(1, Math.ceil(graph.nodes.length / columns));
+  const actualColumnStep = columns === 1
+    ? 0
+    : Math.max(columnStep, (width - horizontalPadding * 2 - nodeWidth) / (columns - 1));
+  const actualRowStep = rows === 1
+    ? 0
+    : Math.max(rowStep, (height - verticalPadding * 2 - nodeHeight) / (rows - 1));
+  const startX = columns === 1
+    ? width / 2
+    : (width - actualColumnStep * (columns - 1)) / 2;
+  const startY = rows === 1
+    ? height / 2
+    : (height - actualRowStep * (rows - 1)) / 2;
+  const degreeByNodeId = new Map(graph.nodes.map((node) => [node.id, 0]));
+
+  for (const edge of graph.edges) {
+    degreeByNodeId.set(edge.source, (degreeByNodeId.get(edge.source) ?? 0) + 1);
+    degreeByNodeId.set(edge.target, (degreeByNodeId.get(edge.target) ?? 0) + 1);
+  }
+
+  return graph.nodes
+    .map((node, originalIndex) => ({ node, originalIndex, degree: degreeByNodeId.get(node.id) ?? 0 }))
+    .sort((a, b) => b.degree - a.degree || a.originalIndex - b.originalIndex)
+    .map(({ node }, index) => {
+      const row = Math.floor(index / columns);
+      const col = index % columns;
+      const rowCount = Math.min(columns, graph.nodes.length - row * columns);
+      const rowOffset = (columns - rowCount) * actualColumnStep * 0.5;
+
+      return {
+        ...node,
+        x: startX + rowOffset + col * actualColumnStep,
+        y: startY + row * actualRowStep,
+      };
+    });
+}
+
 function KnowledgeGraphCanvas({
   graph,
   fullscreen = false,
@@ -545,12 +607,31 @@ function KnowledgeGraphCanvas({
   fullscreen?: boolean;
 }) {
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragStart, setDragStart] = useState<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
-  const nodeById = useMemo(() => new Map(graph.nodes.map((node) => [node.id, node])), [graph.nodes]);
-  const activeNode = graph.nodes.find((node) => node.id === (hoveredNodeId ?? selectedNodeId));
+  const layoutedNodes = useMemo(() => layoutGraphNodes(graph, fullscreen), [fullscreen, graph]);
+  const nodeById = useMemo(() => new Map(layoutedNodes.map((node) => [node.id, node])), [layoutedNodes]);
+  const layoutedGraph = useMemo(() => ({ ...graph, nodes: layoutedNodes }), [graph, layoutedNodes]);
+  const hoveredEdge = graph.edges.find((edge) => edge.id === hoveredEdgeId);
+  const connectedNodeIds = useMemo(() => {
+    if (hoveredNodeId) {
+      return new Set(
+        graph.edges
+          .filter((edge) => edge.source === hoveredNodeId || edge.target === hoveredNodeId)
+          .flatMap((edge) => [edge.source, edge.target]),
+      );
+    }
+
+    if (hoveredEdge) {
+      return new Set([hoveredEdge.source, hoveredEdge.target]);
+    }
+
+    return new Set<string>();
+  }, [graph.edges, hoveredEdge, hoveredNodeId]);
+  const activeNode = layoutedNodes.find((node) => node.id === hoveredNodeId);
+  const hasGraphHover = hoveredNodeId !== null || hoveredEdgeId !== null;
   const canPan = fullscreen;
 
   function handleWheel(event: WheelEvent<SVGSVGElement>) {
@@ -623,11 +704,19 @@ function KnowledgeGraphCanvas({
               return null;
             }
 
-            const isActive = hoveredNodeId === source.id || hoveredNodeId === target.id || selectedNodeId === source.id || selectedNodeId === target.id;
+            const isRelatedToHoveredNode = hoveredNodeId !== null && (edge.source === hoveredNodeId || edge.target === hoveredNodeId);
+            const isActive = hoveredEdgeId === edge.id || isRelatedToHoveredNode;
+            const isDimmed = hasGraphHover && !isActive;
 
             return (
-              <g key={edge.id} className={`graph-edge ${isActive ? "is-active" : ""}`}>
-                <line x1={source.x} x2={target.x} y1={source.y} y2={target.y} />
+              <g
+                key={edge.id}
+                className={`graph-edge ${isActive ? "is-active" : ""} ${isDimmed ? "is-dimmed" : ""}`}
+                onMouseEnter={() => setHoveredEdgeId(edge.id)}
+                onMouseLeave={() => setHoveredEdgeId(null)}
+              >
+                <line className="graph-edge-hit" x1={source.x} x2={target.x} y1={source.y} y2={target.y} />
+                <line className="graph-edge-line" x1={source.x} x2={target.x} y1={source.y} y2={target.y} />
                 <text x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 6}>
                   {edge.label}
                 </text>
@@ -635,25 +724,42 @@ function KnowledgeGraphCanvas({
             );
           })}
 
-          {graph.nodes.map((node) => {
+          {layoutedGraph.nodes.map((node) => {
             const color = getNodeColor(node.type);
-            const isActive = hoveredNodeId === node.id || selectedNodeId === node.id;
+            const isActive = connectedNodeIds.has(node.id);
+            const isDimmed = hasGraphHover && !isActive;
+            const nodeWidth = fullscreen ? 150 : 126;
+            const nodeHeight = fullscreen ? 64 : 56;
+            const labelLines = wrapGraphNodeLabel(node.label, fullscreen ? 18 : 15, fullscreen ? 3 : 2);
+            const firstLineDy = labelLines.length === 1 ? 4 : labelLines.length === 2 ? -6 : -13;
 
             return (
               <g
                 key={node.id}
-                className={`graph-node ${isActive ? "is-active" : ""}`}
+                className={`graph-node ${isActive ? "is-active" : ""} ${isDimmed ? "is-dimmed" : ""}`}
                 style={{ "--node-color": color } as CSSProperties}
-                tabIndex={0}
                 transform={`translate(${node.x} ${node.y})`}
-                onBlur={() => setHoveredNodeId(null)}
-                onClick={() => setSelectedNodeId(node.id)}
-                onFocus={() => setHoveredNodeId(node.id)}
-                onMouseEnter={() => setHoveredNodeId(node.id)}
+                onMouseEnter={() => {
+                  setHoveredEdgeId(null);
+                  setHoveredNodeId(node.id);
+                }}
                 onMouseLeave={() => setHoveredNodeId(null)}
               >
-                <circle r={fullscreen ? 31 : 27} />
-                <text dy="4">{node.label}</text>
+                <rect
+                  height={nodeHeight}
+                  rx={10}
+                  ry={10}
+                  width={nodeWidth}
+                  x={-nodeWidth / 2}
+                  y={-nodeHeight / 2}
+                />
+                <text>
+                  {labelLines.map((line, lineIndex) => (
+                    <tspan key={`${node.id}-${lineIndex}`} x="0" dy={lineIndex === 0 ? firstLineDy : 15}>
+                      {line}
+                    </tspan>
+                  ))}
+                </text>
               </g>
             );
           })}
