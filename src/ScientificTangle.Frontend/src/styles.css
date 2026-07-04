@@ -955,84 +955,14 @@ path {
   height: min(78vh, 760px);
 }
 
-.graph-canvas {
+.graph-cytoscape {
   width: 100%;
   height: 100%;
-  touch-action: none;
+  min-height: 0;
 }
 
-.graph-canvas-pannable {
-  cursor: grab;
-}
-
-.graph-canvas-pannable:active {
-  cursor: grabbing;
-}
-
-.graph-background {
-  fill: #111318;
-}
-
-.graph-edge {
-  transition: opacity 150ms ease;
-}
-
-.graph-edge-hit {
-  stroke: transparent;
-  stroke-width: 14;
-  cursor: pointer;
-}
-
-.graph-edge-line {
-  stroke: rgba(255, 255, 255, 0.26);
-  stroke-width: 1.5;
-  pointer-events: none;
-  transition:
-    stroke 150ms ease,
-    stroke-width 150ms ease;
-}
-
-.graph-edge text {
-  fill: rgba(236, 236, 241, 0.46);
-  font-size: 11px;
-  pointer-events: none;
-  transition: fill 150ms ease;
-}
-
-.graph-edge.is-active .graph-edge-line {
-  stroke: rgba(255, 255, 255, 0.82);
-  stroke-width: 2.2;
-}
-
-.graph-edge.is-active text {
-  fill: rgba(236, 236, 241, 0.78);
-}
-
-.graph-edge.is-dimmed,
-.graph-node.is-dimmed {
-  opacity: 0.3;
-}
-
-.graph-node {
-  color: var(--node-color);
-  cursor: pointer;
-  transition: opacity 150ms ease;
-}
-
-.graph-node rect {
-  fill: color-mix(in srgb, var(--node-color) 18%, #111318);
-  stroke: var(--node-color);
-  stroke-width: 2;
-}
-
-.graph-node text {
-  fill: #f8fafc;
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.2;
-  pointer-events: none;
-  text-anchor: middle;
-  dominant-baseline: middle;
+.graph-cytoscape canvas {
+  outline: none;
 }
 
 .graph-tooltip {
