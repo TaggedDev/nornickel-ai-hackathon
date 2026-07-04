@@ -32,9 +32,10 @@ public sealed class EfChatService : IChatService
         var now = DateTime.UtcNow;
         var chat = new Chat(userId, messageText, now);
         chat.AddMessage(ChatMessageSender.User, messageText, now);
-        await AddAssistantAnswerAsync(chat, messageText, cancellationToken);
-
         _dbContext.Chats.Add(chat);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await AddAssistantAnswerAsync(chat, messageText, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return await BuildDetailsAsync(chat.Id, userId, null, MaxTake, cancellationToken) ??
@@ -87,9 +88,11 @@ public sealed class EfChatService : IChatService
         }
 
         chat.AddMessage(ChatMessageSender.User, messageText, DateTime.UtcNow);
-        await AddAssistantAnswerAsync(chat, messageText, cancellationToken);
-
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await AddAssistantAnswerAsync(chat, messageText, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
         return await BuildDetailsAsync(chat.Id, userId, null, MaxTake, cancellationToken);
     }
 

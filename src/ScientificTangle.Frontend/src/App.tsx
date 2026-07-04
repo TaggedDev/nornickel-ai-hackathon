@@ -33,6 +33,7 @@ type Message = {
   id: string;
   role: "assistant" | "user";
   text: string;
+  isPending?: boolean;
 };
 
 type KnowledgeGraphNode = {
@@ -111,6 +112,8 @@ const USER_STORAGE_KEY = "scientific-tangle-auth-user";
 const SIDEBAR_STORAGE_KEY = "scientific-tangle-sidebar-mode";
 const CONTEXT_STORAGE_KEY = "scientific-tangle-context-open";
 const MOBILE_BREAKPOINT = 768;
+const WAITING_MESSAGE_TEXT = "Ожидаем ответ от LLM";
+const ANSWER_ERROR_TEXT = "Не удалось получить ответ из базы знаний. Попробуйте повторить запрос позже.";
 
 const roleOptions: RoleOption[] = [
   { value: "Researcher", label: "Исследователь" },
@@ -200,6 +203,10 @@ function mapChatMessages(chat: ChatDetailsResponse): Message[] {
 
 function isServerChatId(chatId: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chatId);
+}
+
+function createClientId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 const initialLoginForm: LoginFormState = {
@@ -1177,6 +1184,16 @@ function MarkdownRenderer({
   );
 }
 
+function WaitingMessage() {
+  return (
+    <div className="waiting-message" aria-label={WAITING_MESSAGE_TEXT}>
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
+
 export default function App() {
   const isMobile = useIsMobile();
   const [route, setRoute] = useState<AppRoute>(() => normalizePath(window.location.pathname));
@@ -1386,28 +1403,60 @@ export default function App() {
 
   async function submitMessage(message: string) {
     const messageText = message.trim();
-    if (!messageText) {
+    if (!messageText || isAnswering) {
       return;
     }
+
+    const isExistingServerChat = activeNav === "chat" && isServerChatId(activeChatId);
+    const optimisticChatId = isExistingServerChat ? activeChatId : createClientId("pending-chat");
+    const optimisticUserMessage: Message = {
+      id: createClientId("user-message"),
+      role: "user",
+      text: messageText,
+    };
+    const optimisticAssistantMessage: Message = {
+      id: createClientId("assistant-message"),
+      role: "assistant",
+      text: WAITING_MESSAGE_TEXT,
+      isPending: true,
+    };
 
     setIsAnswering(true);
     setChatRequestError(null);
     setDraft("");
+    setActiveChatId(optimisticChatId);
+    setActiveNav("chat");
+    setRecentChatItems((items) => {
+      if (isExistingServerChat) {
+        return items;
+      }
+
+      const title = messageText.length <= 60 ? messageText : `${messageText.slice(0, 57)}...`;
+      return [{ id: optimisticChatId, title }, ...items];
+    });
+    setChatMessagesById((messagesById) => ({
+      ...messagesById,
+      [optimisticChatId]: [...(messagesById[optimisticChatId] ?? []), optimisticUserMessage, optimisticAssistantMessage],
+    }));
 
     try {
-      const isExistingServerChat = activeNav === "chat" && isServerChatId(activeChatId);
       const chat = isExistingServerChat
-        ? await addChatMessage(activeChatId, messageText)
+        ? await addChatMessage(optimisticChatId, messageText)
         : await createChat(messageText);
 
       setRecentChatItems((items) => {
         const nextItem = { id: chat.id, title: chat.title };
-        return [nextItem, ...items.filter((item) => item.id !== chat.id)];
+        return [nextItem, ...items.filter((item) => item.id !== chat.id && item.id !== optimisticChatId)];
       });
-      setChatMessagesById((messagesById) => ({
-        ...messagesById,
-        [chat.id]: mapChatMessages(chat),
-      }));
+      setChatMessagesById((messagesById) => {
+        const nextMessagesById = { ...messagesById };
+        if (optimisticChatId !== chat.id) {
+          delete nextMessagesById[optimisticChatId];
+        }
+
+        nextMessagesById[chat.id] = mapChatMessages(chat);
+        return nextMessagesById;
+      });
       if (chat.knowledgeContext) {
         setChatKnowledgeContexts((value) => ({
           ...value,
@@ -1418,7 +1467,15 @@ export default function App() {
       setActiveNav("chat");
     } catch (error) {
       const appError = extractAppError(error);
-      setChatRequestError(String(appError.status ?? 500));
+      setChatRequestError(appError.message);
+      setChatMessagesById((messagesById) => ({
+        ...messagesById,
+        [optimisticChatId]: (messagesById[optimisticChatId] ?? []).map((item) =>
+          item.id === optimisticAssistantMessage.id
+            ? { ...item, text: ANSWER_ERROR_TEXT, isPending: false }
+            : item,
+        ),
+      }));
     } finally {
       setIsAnswering(false);
     }
@@ -1738,14 +1795,18 @@ export default function App() {
                   >
                     <div className={`message-bubble message-bubble-${message.role}`}>
                       {message.role === "assistant" ? (
-                        <MarkdownRenderer
-                          text={message.text}
-                          getCitationDocId={(num) => activeKnowledgeContext?.documents.find((document) => document.citationId === num)?.id ?? ""}
-                          onCitationClick={handleCitationClick}
-                          onCitationHover={handleCitationHover}
-                          onCitationLeave={handleCitationLeave}
-                          hoveredCitationNum={hoveredCitationNum}
-                        />
+                        message.isPending ? (
+                          <WaitingMessage />
+                        ) : (
+                          <MarkdownRenderer
+                            text={message.text}
+                            getCitationDocId={(num) => activeKnowledgeContext?.documents.find((document) => document.citationId === num)?.id ?? ""}
+                            onCitationClick={handleCitationClick}
+                            onCitationHover={handleCitationHover}
+                            onCitationLeave={handleCitationLeave}
+                            hoveredCitationNum={hoveredCitationNum}
+                          />
+                        )
                       ) : (
                         <p>{message.text}</p>
                       )}
@@ -1761,7 +1822,6 @@ export default function App() {
                   <p>Продолжите диалог или задайте уточнение по этой теме.</p>
                 </section>
               )}
-              {isAnswering ? <p className="inline-status">Ожидаем ответ от LLM</p> : null}
               {chatRequestError ? <p className="inline-status">{chatRequestError}</p> : null}
             </div>
 

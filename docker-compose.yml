@@ -24,7 +24,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - Urls=http://+:8080
-      - ConnectionStrings:ScientificTangleDatabase=Host=db;Port=5432;Database=scientific_tangle;Username=postgres;Password=postgres
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__ScientificTangleDatabase=Host=db;Port=5432;Database=scientific_tangle;Username=postgres;Password=postgres
+      - GraphRag__BaseUrl=https://science-search.shevkunov.space
+      - GraphRag__TimeoutSeconds=120
     depends_on:
       db:
         condition: service_healthy
