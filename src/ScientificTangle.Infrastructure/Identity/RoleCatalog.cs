@@ -10,10 +10,7 @@ public static class RoleCatalog
 
     public static readonly IReadOnlyList<(string Name, string DisplayName)> Roles =
     [
-        (Researcher, "Исследователь"),
-        (Analyst, "Аналитик"),
-        (ProjectManager, "Руководитель проекта"),
-        (Administrator, "Администратор"),
-        (ExternalPartner, "Внешний партнёр")
+        (Researcher, "Исследователь"), (Analyst, "Аналитик"), (ProjectManager, "Руководитель проекта"),
+        (Administrator, "Администратор"), (ExternalPartner, "Внешний партнёр")
     ];
 }

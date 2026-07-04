@@ -14,9 +14,7 @@ public sealed class AuthController : ControllerBase
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly RoleManager<ApplicationRole> _roleManager;
 
-    public AuthController(
-        UserManager<ApplicationUser> userManager,
-        SignInManager<ApplicationUser> signInManager,
+    public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager,
         RoleManager<ApplicationRole> roleManager)
     {
         _userManager = userManager;
@@ -113,11 +111,8 @@ public sealed class AuthController : ControllerBase
             return Unauthorized(new ProblemDetails { Title = "Invalid credentials." });
         }
 
-        var signInResult = await _signInManager.PasswordSignInAsync(
-            user.UserName!,
-            request.Password,
-            request.RememberMe,
-            lockoutOnFailure: false);
+        var signInResult = await _signInManager.PasswordSignInAsync(user.UserName!, request.Password,
+            request.RememberMe, lockoutOnFailure: false);
 
         if (!signInResult.Succeeded)
         {
@@ -145,7 +140,8 @@ public sealed class AuthController : ControllerBase
         request.RoleName = request.RoleName.Trim();
     }
 
-    private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
+    private static string NormalizeEmail(string email)
+        => email.Trim().ToLowerInvariant();
 
     private void AddIdentityErrors(IdentityResult result)
     {

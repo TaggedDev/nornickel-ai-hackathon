@@ -4,11 +4,10 @@ using ScientificTangle.Infrastructure.Identity;
 
 namespace ScientificTangle.Infrastructure.Persistence;
 
-public sealed class ScientificTangleIdentityDbContext
-    : IdentityDbContext<ApplicationUser, ApplicationRole, string>
+public sealed class ScientificTangleIdentityDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, string>
 {
-    public ScientificTangleIdentityDbContext(DbContextOptions<ScientificTangleIdentityDbContext> options)
-        : base(options)
+    public ScientificTangleIdentityDbContext(DbContextOptions<ScientificTangleIdentityDbContext> options) :
+        base(options)
     {
     }
 

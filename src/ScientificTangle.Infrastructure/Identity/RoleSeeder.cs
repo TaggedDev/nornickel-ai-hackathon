@@ -13,9 +13,7 @@ public static class RoleSeeder
             {
                 await roleManager.CreateAsync(new ApplicationRole
                 {
-                    Name = name,
-                    NormalizedName = name.ToUpperInvariant(),
-                    DisplayName = displayName
+                    Name = name, NormalizedName = name.ToUpperInvariant(), DisplayName = displayName
                 });
                 continue;
             }
