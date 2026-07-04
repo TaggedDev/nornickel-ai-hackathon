@@ -45,13 +45,23 @@ public static class ServiceProviderDatabaseExtensions
             """, cancellationToken);
 
         await dbContext.Database.ExecuteSqlRawAsync("""
-            ALTER TABLE "Chats"
-            ADD COLUMN IF NOT EXISTS "RepresentedKnowledgeGraphNodeIdsJson" text NOT NULL DEFAULT '[]';
+            DO $$
+            BEGIN
+                IF to_regclass('public."Chats"') IS NOT NULL THEN
+                    ALTER TABLE "Chats"
+                    ADD COLUMN IF NOT EXISTS "RepresentedKnowledgeGraphNodeIdsJson" text NOT NULL DEFAULT '[]';
+                END IF;
+            END $$;
             """, cancellationToken);
 
         await dbContext.Database.ExecuteSqlRawAsync("""
-            ALTER TABLE "Chats"
-            ADD COLUMN IF NOT EXISTS "KnowledgeContextJson" jsonb NULL;
+            DO $$
+            BEGIN
+                IF to_regclass('public."Chats"') IS NOT NULL THEN
+                    ALTER TABLE "Chats"
+                    ADD COLUMN IF NOT EXISTS "KnowledgeContextJson" jsonb NULL;
+                END IF;
+            END $$;
             """, cancellationToken);
 
         await dbContext.Database.ExecuteSqlRawAsync("""
