@@ -957,67 +957,14 @@ path {
   height: min(78vh, 760px);
 }
 
-.graph-canvas {
+.graph-cytoscape {
   width: 100%;
   height: 100%;
-  touch-action: none;
+  min-height: 0;
 }
 
-.graph-canvas-pannable {
-  cursor: grab;
-}
-
-.graph-canvas-pannable:active {
-  cursor: grabbing;
-}
-
-.graph-background {
-  fill: #111318;
-}
-
-.graph-edge line {
-  stroke: rgba(255, 255, 255, 0.26);
-  stroke-width: 1.5;
-}
-
-.graph-edge text {
-  fill: rgba(236, 236, 241, 0.46);
-  font-size: 11px;
-  pointer-events: none;
-}
-
-.graph-edge.is-active line {
-  stroke: rgba(255, 255, 255, 0.64);
-  stroke-width: 2.2;
-}
-
-.graph-node {
-  color: var(--node-color);
-  cursor: pointer;
-}
-
-.graph-node circle {
-  fill: color-mix(in srgb, var(--node-color) 18%, #111318);
-  stroke: var(--node-color);
-  stroke-width: 2;
-  transition:
-    filter 150ms ease,
-    stroke-width 150ms ease,
-    transform 150ms ease;
-}
-
-.graph-node text {
-  fill: #f8fafc;
-  font-size: 13px;
-  font-weight: 650;
-  pointer-events: none;
-  text-anchor: middle;
-}
-
-.graph-node.is-active circle,
-.graph-node:hover circle {
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--node-color) 60%, transparent));
-  stroke-width: 3;
+.graph-cytoscape canvas {
+  outline: none;
 }
 
 .graph-tooltip {

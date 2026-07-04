@@ -1,4 +1,5 @@
-﻿import { type CSSProperties, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type WheelEvent, useEffect, useMemo, useState } from "react";
+﻿import cytoscape, { type Core, type StylesheetJson } from "cytoscape";
+import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   type AuthUser,
@@ -38,7 +39,7 @@ type Message = {
 
 type KnowledgeGraphNode = {
   id: string;
-  type: "Material" | "Process" | "Equipment" | "Property" | "Experiment" | "Publication" | "Expert" | "Facility";
+  type: string;
   label: string;
   canonicalName: string;
   aliases: string[];
@@ -147,33 +148,75 @@ const edgeTypeLabels: Record<string, string> = {
   contradicts: "противоречит",
 };
 
-const graphNodeLayout: Record<string, { x: number; y: number }> = {
-  n1: { x: 420, y: 235 },
-  n2: { x: 205, y: 170 },
-  n3: { x: 210, y: 355 },
-  n4: { x: 650, y: 170 },
-  n5: { x: 650, y: 355 },
+const nodeTypeAliases: Record<string, string> = {
+  equipment: "Equipment",
+  entity: "Entity",
+  experiment: "Experiment",
+  expert: "Expert",
+  facility: "Facility",
+  material: "Material",
+  method: "Process",
+  process: "Process",
+  property: "Property",
+  publication: "Publication",
 };
 
-function buildKnowledgeContextFromApiResponse(context: ChatKnowledgeContextResponse): ChatKnowledgeContext {
-  const nodes = context.graph.nodes.map((node, index) => {
-    const fallbackAngle = (Math.PI * 2 * index) / Math.max(context.graph.nodes.length, 1);
-    const layout = graphNodeLayout[node.id] ?? {
-      x: 420 + Math.cos(fallbackAngle) * 230,
-      y: 235 + Math.sin(fallbackAngle) * 135,
-    };
+const genericNodeTypes = new Set(["", "entity", "node", "thing"]);
 
-    return {
+function normalizeNodeType(type: string | null | undefined) {
+  const normalized = type?.trim() ?? "";
+  return nodeTypeAliases[normalized.toLowerCase()] ?? normalized;
+}
+
+function isGenericNodeType(type: string | null | undefined) {
+  return genericNodeTypes.has((type ?? "").trim().toLowerCase());
+}
+
+function inferNodeTypesFromGraph(graph: ChatKnowledgeContextResponse["graph"]) {
+  const inferredTypes = new Map<string, string>();
+
+  for (const edge of graph.edges) {
+    if (edge.type === "uses_material") {
+      inferredTypes.set(edge.source, inferredTypes.get(edge.source) ?? "Process");
+      inferredTypes.set(edge.target, "Material");
+    }
+
+    if (edge.type === "operates_at_condition") {
+      inferredTypes.set(edge.source, inferredTypes.get(edge.source) ?? "Process");
+      inferredTypes.set(edge.target, "Property");
+    }
+
+    if (edge.type === "produces_output") {
+      inferredTypes.set(edge.source, inferredTypes.get(edge.source) ?? "Process");
+      inferredTypes.set(edge.target, inferredTypes.get(edge.target) ?? "Material");
+    }
+
+    if (edge.type === "described_in") {
+      inferredTypes.set(edge.target, inferredTypes.get(edge.target) ?? "Publication");
+    }
+
+    if (edge.type === "validated_by") {
+      inferredTypes.set(edge.target, inferredTypes.get(edge.target) ?? "Experiment");
+    }
+  }
+
+  return inferredTypes;
+}
+
+function buildKnowledgeContextFromApiResponse(context: ChatKnowledgeContextResponse): ChatKnowledgeContext {
+  const inferredNodeTypes = inferNodeTypesFromGraph(context.graph);
+  const nodes = context.graph.nodes.map((node) => ({
       id: node.id,
-      type: node.type as KnowledgeGraphNode["type"],
+      type: isGenericNodeType(node.type)
+        ? inferredNodeTypes.get(node.id) ?? "Entity"
+        : normalizeNodeType(node.type),
       label: node.label,
       canonicalName: node.canonicalName,
       aliases: node.aliases,
       properties: node.properties,
-      x: layout.x,
-      y: layout.y,
-    };
-  });
+      x: 0,
+      y: 0,
+    }));
 
   return {
     graph: {
@@ -522,19 +565,58 @@ type IconName =
   | "plus"
   | "minus";
 
-const nodeTypeColors: Record<KnowledgeGraphNode["type"], string> = {
-  Material: "#2dd4bf",
-  Process: "#60a5fa",
-  Equipment: "#f59e0b",
-  Property: "#a78bfa",
-  Experiment: "#fb7185",
-  Publication: "#34d399",
-  Expert: "#f472b6",
-  Facility: "#facc15",
+type NodeTypePalette = {
+  borderColor: string;
+  backgroundColor: string;
 };
 
-function getNodeColor(type: KnowledgeGraphNode["type"]) {
-  return nodeTypeColors[type] ?? "#d1d5db";
+const fallbackNodeTypePalette: NodeTypePalette = {
+  borderColor: "#fb7185",
+  backgroundColor: "#4a1f2a",
+};
+
+const nodeTypePalettes: Record<string, NodeTypePalette> = {
+  Entity: {
+    borderColor: "#94a3b8",
+    backgroundColor: "#273244",
+  },
+  Material: {
+    borderColor: "#2dd4bf",
+    backgroundColor: "#123f3b",
+  },
+  Process: {
+    borderColor: "#60a5fa",
+    backgroundColor: "#172f52",
+  },
+  Equipment: {
+    borderColor: "#f59e0b",
+    backgroundColor: "#4b3210",
+  },
+  Property: {
+    borderColor: "#a78bfa",
+    backgroundColor: "#332457",
+  },
+  Experiment: {
+    borderColor: "#fb7185",
+    backgroundColor: "#4d1f2a",
+  },
+  Publication: {
+    borderColor: "#34d399",
+    backgroundColor: "#123d2d",
+  },
+  Expert: {
+    borderColor: "#f472b6",
+    backgroundColor: "#4a1f39",
+  },
+  Facility: {
+    borderColor: "#facc15",
+    backgroundColor: "#493d12",
+  },
+};
+
+function getNodeTypePalette(type: string) {
+  const normalizedType = normalizeNodeType(type);
+  return nodeTypePalettes[normalizedType] ?? fallbackNodeTypePalette;
 }
 
 function KnowledgeGraphCanvas({
@@ -544,52 +626,156 @@ function KnowledgeGraphCanvas({
   graph: ChatKnowledgeContext["graph"];
   fullscreen?: boolean;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const cyRef = useRef<Core | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [dragStart, setDragStart] = useState<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
-  const nodeById = useMemo(() => new Map(graph.nodes.map((node) => [node.id, node])), [graph.nodes]);
-  const activeNode = graph.nodes.find((node) => node.id === (hoveredNodeId ?? selectedNodeId));
-  const canPan = fullscreen;
+  const activeNode = graph.nodes.find((node) => node.id === hoveredNodeId);
 
-  function handleWheel(event: WheelEvent<SVGSVGElement>) {
-    if (!fullscreen) {
+  useEffect(() => {
+    if (!containerRef.current) {
       return;
     }
 
-    event.preventDefault();
-    setScale((value) => Math.min(2.4, Math.max(0.65, value + (event.deltaY < 0 ? 0.12 : -0.12))));
-  }
-
-  function handlePointerDown(event: PointerEvent<SVGSVGElement>) {
-    if (!canPan || !(event.target instanceof Element) || !event.target.classList.contains("graph-background")) {
-      return;
-    }
-
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDragStart({ pointerId: event.pointerId, x: event.clientX, y: event.clientY, offsetX: offset.x, offsetY: offset.y });
-  }
-
-  function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
-    if (!dragStart || dragStart.pointerId !== event.pointerId) {
-      return;
-    }
-
-    setOffset({
-      x: dragStart.offsetX + (event.clientX - dragStart.x) / scale,
-      y: dragStart.offsetY + (event.clientY - dragStart.y) / scale,
+    const cy = cytoscape({
+      autounselectify: true,
+      boxSelectionEnabled: false,
+      container: containerRef.current,
+      elements: [
+        ...graph.nodes.map((node) => ({
+          data: {
+            id: node.id,
+            label: node.label,
+            ...getNodeTypePalette(node.type),
+          },
+        })),
+        ...graph.edges.map((edge) => ({
+          data: {
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            label: edge.label,
+          },
+        })),
+      ],
+      layout: {
+        name: "cose",
+        animate: false,
+        edgeElasticity: 80,
+        fit: true,
+        gravity: 0.18,
+        idealEdgeLength: fullscreen ? 180 : 150,
+        nestingFactor: 1.2,
+        nodeOverlap: 32,
+        nodeRepulsion: 900000,
+        numIter: 1200,
+        padding: fullscreen ? 48 : 28,
+        randomize: false,
+      },
+      maxZoom: 2.4,
+      minZoom: 0.35,
+      style: [
+        {
+          selector: "node",
+          style: {
+            "background-color": "data(backgroundColor)",
+            "background-opacity": 0.92,
+            "border-color": "data(borderColor)",
+            "border-width": 2,
+            color: "#f8fafc",
+            "font-family": "Inter, Segoe UI, system-ui, sans-serif",
+            "font-size": fullscreen ? 12 : 11,
+            "font-weight": 650,
+            height: fullscreen ? 64 : 56,
+            label: "data(label)",
+            shape: "round-rectangle",
+            "text-halign": "center",
+            "text-max-width": fullscreen ? "128px" : "108px",
+            "text-valign": "center",
+            "text-wrap": "wrap",
+            width: fullscreen ? 150 : 126,
+          },
+        },
+        {
+          selector: "edge",
+          style: {
+            color: "rgba(236, 236, 241, 0.58)",
+            "curve-style": "bezier",
+            "font-family": "Inter, Segoe UI, system-ui, sans-serif",
+            "font-size": 10,
+            label: "data(label)",
+            "line-color": "rgba(255, 255, 255, 0.28)",
+            "target-arrow-color": "rgba(255, 255, 255, 0.28)",
+            "target-arrow-shape": "triangle",
+            "text-background-color": "#111318",
+            "text-background-opacity": 0.82,
+            "text-background-padding": "2px",
+            "text-max-width": "104px",
+            "text-rotation": "autorotate",
+            "text-wrap": "wrap",
+            width: 1.4,
+          },
+        },
+        {
+          selector: ".dimmed",
+          style: {
+            opacity: 0.3,
+          },
+        },
+        {
+          selector: ".highlighted-edge",
+          style: {
+            color: "rgba(236, 236, 241, 0.86)",
+            "line-color": "rgba(255, 255, 255, 0.86)",
+            "target-arrow-color": "rgba(255, 255, 255, 0.86)",
+            width: 2.4,
+          },
+        },
+      ] satisfies StylesheetJson,
+      wheelSensitivity: 0.18,
     });
-  }
 
-  function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
-    if (dragStart?.pointerId === event.pointerId) {
-      setDragStart(null);
-    }
-  }
+    cyRef.current = cy;
+
+    const clearHighlights = () => {
+      cy.elements().removeClass("dimmed highlighted-edge");
+      setHoveredNodeId(null);
+    };
+
+    cy.on("mouseover", "node", (event) => {
+      const node = event.target;
+      const neighborhood = node.closedNeighborhood();
+      cy.elements().not(neighborhood).addClass("dimmed");
+      neighborhood.edges().addClass("highlighted-edge");
+      setHoveredNodeId(node.id());
+    });
+
+    cy.on("mouseover", "edge", (event) => {
+      const edge = event.target;
+      const connected = edge.connectedNodes().union(edge);
+      cy.elements().not(connected).addClass("dimmed");
+      edge.addClass("highlighted-edge");
+      setHoveredNodeId(null);
+    });
+
+    cy.on("mouseout", "node, edge", clearHighlights);
+
+    return () => {
+      cy.destroy();
+      cyRef.current = null;
+    };
+  }, [fullscreen, graph]);
 
   function zoomBy(delta: number) {
-    setScale((value) => Math.min(2.4, Math.max(0.65, value + delta)));
+    const cy = cyRef.current;
+
+    if (!cy) {
+      return;
+    }
+
+    cy.zoom({
+      level: Math.min(2.4, Math.max(0.35, cy.zoom() + delta)),
+      renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 },
+    });
   }
 
   return (
@@ -604,64 +790,10 @@ function KnowledgeGraphCanvas({
           </button>
         </div>
       ) : null}
-      <svg
-        aria-label="Knowledge graph"
-        className={canPan ? "graph-canvas graph-canvas-pannable" : "graph-canvas"}
-        role="img"
-        viewBox="0 0 840 472.5"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onWheel={handleWheel}
-      >
-        <rect className="graph-background" height="472.5" width="840" x="0" y="0" />
-        <g transform={`translate(${offset.x} ${offset.y}) scale(${scale})`}>
-          {graph.edges.map((edge) => {
-            const source = nodeById.get(edge.source);
-            const target = nodeById.get(edge.target);
-            if (!source || !target) {
-              return null;
-            }
-
-            const isActive = hoveredNodeId === source.id || hoveredNodeId === target.id || selectedNodeId === source.id || selectedNodeId === target.id;
-
-            return (
-              <g key={edge.id} className={`graph-edge ${isActive ? "is-active" : ""}`}>
-                <line x1={source.x} x2={target.x} y1={source.y} y2={target.y} />
-                <text x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 6}>
-                  {edge.label}
-                </text>
-              </g>
-            );
-          })}
-
-          {graph.nodes.map((node) => {
-            const color = getNodeColor(node.type);
-            const isActive = hoveredNodeId === node.id || selectedNodeId === node.id;
-
-            return (
-              <g
-                key={node.id}
-                className={`graph-node ${isActive ? "is-active" : ""}`}
-                style={{ "--node-color": color } as CSSProperties}
-                tabIndex={0}
-                transform={`translate(${node.x} ${node.y})`}
-                onBlur={() => setHoveredNodeId(null)}
-                onClick={() => setSelectedNodeId(node.id)}
-                onFocus={() => setHoveredNodeId(node.id)}
-                onMouseEnter={() => setHoveredNodeId(node.id)}
-                onMouseLeave={() => setHoveredNodeId(null)}
-              >
-                <circle r={fullscreen ? 31 : 27} />
-                <text dy="4">{node.label}</text>
-              </g>
-            );
-          })}
-        </g>
-      </svg>
+      <div ref={containerRef} aria-label="Knowledge graph" className="graph-cytoscape" />
 
       {activeNode ? (
-        <div className="graph-tooltip" style={{ borderColor: getNodeColor(activeNode.type) }}>
+        <div className="graph-tooltip" style={{ borderColor: getNodeTypePalette(activeNode.type).borderColor }}>
           <strong>{activeNode.label}</strong>
           <span>{activeNode.canonicalName}</span>
         </div>
