@@ -92,7 +92,8 @@ path {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: var(--sidebar-width);
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   background: var(--bg-sidebar);
   border-right: 0;
   transition:
@@ -466,7 +467,8 @@ path {
 }
 
 .message-bubble-user {
-  background: #2f2f2f;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .message-bubble p {
@@ -501,6 +503,42 @@ path {
   font-size: clamp(1.7rem, 4vw, 2rem);
   font-weight: 600;
   letter-spacing: -0.03em;
+}
+
+.selected-chat-start {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.9rem;
+  width: min(100%, 720px);
+  min-height: 100%;
+  padding: 3rem 0 1rem;
+  text-align: center;
+}
+
+.selected-chat-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-main);
+}
+
+.selected-chat-start h2 {
+  max-width: min(100%, 680px);
+  margin: 0;
+  font-size: clamp(1.45rem, 3vw, 1.9rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.selected-chat-start p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--text-muted);
 }
 
 .prompt-grid {
