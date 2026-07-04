@@ -71,47 +71,47 @@ const roleOptions: RoleOption[] = [
 ];
 
 const navItems: NavItem[] = [
-  { id: "new", label: "New chat", icon: "spark" },
-  { id: "search", label: "Search chats", icon: "search" },
+  { id: "new", label: "Новый чат", icon: "spark" },
+  { id: "search", label: "Поиск чатов", icon: "search" },
 ];
 
 const pinnedChats: ChatItem[] = [
-  { id: "p1", title: "Nickel process chain overview" },
-  { id: "p2", title: "Sulfide ore enrichment summary" },
+  { id: "p1", title: "Обзор технологической цепочки никеля" },
+  { id: "p2", title: "Сводка по обогащению сульфидной руды" },
 ];
 
 const recentChats: ChatItem[] = [
-  { id: "r1", title: "New chat" },
-  { id: "r2", title: "Collect LLM questions for metallurgical constraints" },
-  { id: "r3", title: "Compare concentrate processing scenarios by energy cost" },
-  { id: "r4", title: "Prepare a graph knowledge outline for raw material flows" },
-  { id: "r5", title: "List transition risks for the new furnace mode" },
-  { id: "r6", title: "Compare quarterly production loss reports" },
+  { id: "r1", title: "Новый чат" },
+  { id: "r2", title: "Собрать вопросы для LLM по металлургическим ограничениям" },
+  { id: "r3", title: "Сравнить сценарии переработки концентрата по энергозатратам" },
+  { id: "r4", title: "Подготовить структуру графа знаний для потоков сырья" },
+  { id: "r5", title: "Перечислить риски перехода на новый режим печи" },
+  { id: "r6", title: "Сравнить квартальные отчёты о потерях производства" },
 ];
 
 const messages: Message[] = [
   {
     id: "m1",
     role: "assistant",
-    text: "The interface uses a dark shell with navigation, chat history, and a contextual side panel.",
+    text: "Интерфейс использует тёмную оболочку с навигацией, историей чатов и контекстной боковой панелью.",
   },
   {
     id: "m2",
     role: "user",
-    text: "Build a ChatGPT-like layout, but keep it generic and suitable for a custom product.",
+    text: "Собери интерфейс в стиле ChatGPT, но оставь его универсальным и подходящим для кастомного продукта.",
   },
   {
     id: "m3",
     role: "assistant",
-    text: "The left sidebar stays visible on desktop, collapses into an icon rail, and becomes a drawer on mobile.",
+    text: "Левая панель видна на десктопе, сворачивается до панели иконок и становится выдвижным меню на мобильных устройствах.",
   },
 ];
 
 const promptSuggestions = [
-  "Summarize nickel production risks",
-  "Compare processing scenarios",
-  "Draft knowledge graph entities",
-  "Prepare metallurgical questions",
+  "Суммировать риски производства никеля",
+  "Сравнить сценарии переработки",
+  "Подготовить сущности графа знаний",
+  "Сформулировать вопросы по металлургии",
 ];
 
 const initialLoginForm: LoginFormState = {
@@ -190,6 +190,80 @@ function getFieldErrors(errors?: ValidationErrors, fieldName?: string) {
   }
 
   return errors[fieldName] ?? [];
+}
+
+function hasFieldError(errors: ValidationErrors | undefined, fieldName: string) {
+  return getFieldErrors(errors, fieldName).length > 0;
+}
+
+function getPasswordPolicyErrors(errors?: ValidationErrors) {
+  if (!errors) {
+    return [];
+  }
+
+  return Object.entries(errors)
+    .filter(([key]) => key.startsWith("Password") && key !== "Password")
+    .flatMap(([, messages]) => messages);
+}
+
+function getRegisterValidationErrors(form: RegisterFormState): ValidationErrors {
+  const errors: ValidationErrors = {};
+  const password = form.password.trim();
+  const confirmPassword = form.confirmPassword.trim();
+
+  if (!form.lastName.trim()) {
+    errors.LastName = ["Укажите фамилию."];
+  }
+
+  if (!form.firstName.trim()) {
+    errors.FirstName = ["Укажите имя."];
+  }
+
+  if (!form.email.trim()) {
+    errors.Email = ["Укажите электронную почту."];
+  }
+
+  if (!form.roleName.trim()) {
+    errors.RoleName = ["Выберите роль."];
+  }
+
+  if (!password) {
+    errors.Password = ["Укажите пароль."];
+  }
+
+  if (!confirmPassword) {
+    errors.ConfirmPassword = ["Подтвердите пароль."];
+  }
+
+  if (password && confirmPassword && password !== confirmPassword) {
+    errors.ConfirmPassword = ["Пароли не совпадают."];
+  }
+
+  if (password && !isPasswordAllowed(password)) {
+    errors.PasswordPolicy = ["Пароль должен содержать минимум 6 символов, заглавную букву, строчную букву и цифру."];
+  }
+
+  return errors;
+}
+
+function hasValidationErrors(errors: ValidationErrors) {
+  return Object.values(errors).some((messages) => messages.length > 0);
+}
+
+function isPasswordAllowed(password: string) {
+  return password.length >= 6 && /[A-ZА-ЯЁ]/.test(password) && /[a-zа-яё]/.test(password) && /\d/.test(password);
+}
+
+function getTextFieldClassName(hasError: boolean) {
+  return `text-field ${hasError ? "text-field-error" : ""}`;
+}
+
+function shouldShowErrorBanner(errorState: AppErrorState | null) {
+  if (!errorState) {
+    return false;
+  }
+
+  return errorState.message.trim().length > 0 && errorState.message !== "One or more validation errors occurred.";
 }
 
 function getInitials(user: AuthUser) {
@@ -362,8 +436,15 @@ function AuthScreen({
 
   async function handleRegisterSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setViewState("loading");
     clearErrors();
+
+    const validationErrors = getRegisterValidationErrors(registerForm);
+    if (hasValidationErrors(validationErrors)) {
+      setErrorState({ message: "", fieldErrors: validationErrors });
+      return;
+    }
+
+    setViewState("loading");
 
     try {
       const user = await register(registerForm);
@@ -391,6 +472,10 @@ function AuthScreen({
   }
 
   const isBusy = viewState === "loading";
+  const fieldErrors = errorState?.fieldErrors;
+  const passwordPolicyErrors = getPasswordPolicyErrors(fieldErrors);
+  const hasPasswordError = hasFieldError(fieldErrors, "Password") || passwordPolicyErrors.length > 0;
+  const hasConfirmPasswordError = hasFieldError(fieldErrors, "ConfirmPassword") || passwordPolicyErrors.length > 0;
 
   return (
     <div className="auth-page">
@@ -428,15 +513,15 @@ function AuthScreen({
           </button>
         </div>
 
-        {errorState ? <div className="form-error-banner">{errorState.message}</div> : null}
+        {shouldShowErrorBanner(errorState) ? <div className="form-error-banner">{errorState?.message}</div> : null}
 
         {authMode === "login" ? (
           <form className="auth-form" onSubmit={handleLoginSubmit}>
             <label className="field">
-              <span>Email</span>
+              <span>Электронная почта</span>
               <input
                 autoComplete="email"
-                className="text-field"
+                className={getTextFieldClassName(hasFieldError(fieldErrors, "Email"))}
                 type="email"
                 value={loginForm.email}
                 onChange={(event) => setLoginForm((value) => ({ ...value, email: event.target.value }))}
@@ -452,7 +537,7 @@ function AuthScreen({
               <span>Пароль</span>
               <input
                 autoComplete="current-password"
-                className="text-field"
+                className={getTextFieldClassName(hasFieldError(fieldErrors, "Password"))}
                 type="password"
                 value={loginForm.password}
                 onChange={(event) => setLoginForm((value) => ({ ...value, password: event.target.value }))}
@@ -490,7 +575,7 @@ function AuthScreen({
               <span>Фамилия</span>
               <input
                 autoComplete="family-name"
-                className="text-field"
+                className={getTextFieldClassName(hasFieldError(fieldErrors, "LastName"))}
                 maxLength={100}
                 value={registerForm.lastName}
                 onChange={(event) => setRegisterForm((value) => ({ ...value, lastName: event.target.value }))}
@@ -506,7 +591,7 @@ function AuthScreen({
               <span>Имя</span>
               <input
                 autoComplete="given-name"
-                className="text-field"
+                className={getTextFieldClassName(hasFieldError(fieldErrors, "FirstName"))}
                 maxLength={100}
                 value={registerForm.firstName}
                 onChange={(event) => setRegisterForm((value) => ({ ...value, firstName: event.target.value }))}
@@ -519,10 +604,10 @@ function AuthScreen({
             </label>
 
             <label className="field">
-              <span>Email</span>
+              <span>Электронная почта</span>
               <input
                 autoComplete="email"
-                className="text-field"
+                className={getTextFieldClassName(hasFieldError(fieldErrors, "Email") || Boolean(emailAvailabilityMessage))}
                 type="email"
                 value={registerForm.email}
                 onBlur={handleEmailBlur}
@@ -542,7 +627,7 @@ function AuthScreen({
             <label className="field">
               <span>Роль</span>
               <select
-                className="text-field"
+                className={`${getTextFieldClassName(hasFieldError(fieldErrors, "RoleName"))} role-select`}
                 value={registerForm.roleName}
                 onChange={(event) => setRegisterForm((value) => ({ ...value, roleName: event.target.value }))}
               >
@@ -563,13 +648,18 @@ function AuthScreen({
               <span>Пароль</span>
               <input
                 autoComplete="new-password"
-                className="text-field"
+                className={getTextFieldClassName(hasPasswordError)}
                 type="password"
                 value={registerForm.password}
                 onChange={(event) => setRegisterForm((value) => ({ ...value, password: event.target.value }))}
               />
-              <small className="field-hint">Минимум 6 символов, uppercase, lowercase и цифра.</small>
+              <small className="field-hint">Минимум 6 символов, заглавная буква, строчная буква и цифра.</small>
               {getFieldErrors(errorState?.fieldErrors, "Password").map((message) => (
+                <small key={message} className="field-error">
+                  {message}
+                </small>
+              ))}
+              {passwordPolicyErrors.map((message) => (
                 <small key={message} className="field-error">
                   {message}
                 </small>
@@ -580,7 +670,7 @@ function AuthScreen({
               <span>Подтверждение пароля</span>
               <input
                 autoComplete="new-password"
-                className="text-field"
+                className={getTextFieldClassName(hasConfirmPasswordError)}
                 type="password"
                 value={registerForm.confirmPassword}
                 onChange={(event) =>
@@ -800,15 +890,14 @@ export default function App() {
     ? allChats.filter((chat) => chat.title.toLowerCase().includes(normalizedSearchQuery))
     : allChats;
   const profileLabel = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "User";
-  const dashboardMetrics = overview?.metrics ?? [];
   const dashboardActivities = overview?.activities ?? [];
   const welcomeTitle = useMemo(() => {
     if (isSearchChats) {
-      return "Search chats";
+      return "Поиск чатов";
     }
 
     if (isNewChat) {
-      return "New chat";
+      return "Новый чат";
     }
 
     return overview?.productName ?? activeChat.title;
@@ -837,7 +926,7 @@ export default function App() {
     <div className="app-shell">
       {isMobile && mobileSidebarOpen ? (
         <button
-          aria-label="Close sidebar"
+          aria-label="Закрыть боковую панель"
           className="sidebar-overlay"
           type="button"
           onClick={() => setMobileSidebarOpen(false)}
@@ -846,14 +935,14 @@ export default function App() {
 
       <aside
         className={sidebarClassName}
-        aria-label="Navigation and chat history"
+          aria-label="Навигация и история чатов"
         onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
         onTouchStart={(event) => handleTouchStart(event.changedTouches[0]?.clientX ?? 0)}
       >
         <div className="sidebar-top">
           <div className="sidebar-brand">
             <button
-              aria-label={isMobile ? "Close menu" : sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+              aria-label={isMobile ? "Закрыть меню" : sidebarExpanded ? "Свернуть боковую панель" : "Развернуть боковую панель"}
               className="sidebar-toggle"
               type="button"
               onClick={handleToggleSidebar}
@@ -864,7 +953,7 @@ export default function App() {
             {sidebarExpanded ? (
               <div className="sidebar-brand-text">
                 <strong>Scientific Tangle</strong>
-                <span>Research workspace</span>
+                <span>Исследовательская среда</span>
               </div>
             ) : null}
           </div>
@@ -896,7 +985,7 @@ export default function App() {
           <section className="chat-group" aria-labelledby="pinned-chats-heading">
             {sidebarExpanded ? (
               <h2 className="chat-group-title" id="pinned-chats-heading">
-                Pinned
+                Закреплённые
               </h2>
             ) : null}
             <div className="chat-list" role="list">
@@ -924,7 +1013,7 @@ export default function App() {
           <section className="chat-group" aria-labelledby="recent-chats-heading">
             {sidebarExpanded ? (
               <h2 className="chat-group-title" id="recent-chats-heading">
-                Recent
+                Недавние
               </h2>
             ) : null}
             <div className="chat-list" role="list">
@@ -987,7 +1076,7 @@ export default function App() {
           <div className="main-header-left">
             {isMobile ? (
               <button
-                aria-label="Open menu"
+                aria-label="Открыть меню"
                 className="mobile-menu-button"
                 type="button"
                 onClick={() => setMobileSidebarOpen(true)}
@@ -997,7 +1086,7 @@ export default function App() {
             ) : null}
 
             <div>
-              <p className="main-header-kicker">Workspace</p>
+              <p className="main-header-kicker">Рабочая область</p>
               <h1>{welcomeTitle}</h1>
             </div>
           </div>
@@ -1008,39 +1097,27 @@ export default function App() {
             type="button"
             onClick={() => setContextOpen((value) => !value)}
           >
-            Context
+            Контекст
           </button>
         </header>
 
         <section className={`workspace ${contextOpen ? "workspace-with-context" : ""}`}>
-          <div className="conversation-panel" aria-label="Conversation">
-            {dashboardMetrics.length > 0 ? (
-              <section className="overview-grid" aria-label="Dashboard overview">
-                {dashboardMetrics.map((metric) => (
-                  <article key={metric.label} className="overview-card">
-                    <strong>{metric.value}</strong>
-                    <h2>{metric.label}</h2>
-                    <p>{metric.description}</p>
-                  </article>
-                ))}
-              </section>
-            ) : null}
-
+          <div className="conversation-panel" aria-label="Диалог">
             {overviewError ? <div className="inline-status">{overviewError}</div> : null}
 
             <div className="message-list">
               {isSearchChats ? (
-                <section className="search-chat-view" aria-label="Search chats">
+                <section className="search-chat-view" aria-label="Поиск чатов">
                   <div className="search-chat-panel">
                     <div className="search-chat-heading">
-                      <h2>Search chats</h2>
-                      <p>Find a previous conversation by title.</p>
+                      <h2>Поиск чатов</h2>
+                      <p>Найдите предыдущий диалог по названию.</p>
                     </div>
                     <label className="search-chat-field">
                       <Icon name="search" />
                       <input
-                        aria-label="Search chats"
-                        placeholder="Search chats..."
+                        aria-label="Поиск чатов"
+                        placeholder="Поиск чатов..."
                         type="search"
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
@@ -1060,17 +1137,17 @@ export default function App() {
                           </button>
                         ))
                       ) : (
-                        <p className="search-chat-empty">No chats found</p>
+                        <p className="search-chat-empty">Чаты не найдены</p>
                       )}
                     </div>
                   </div>
                 </section>
               ) : isNewChat ? (
-                <section className="empty-chat" aria-label="New chat suggestions">
+                <section className="empty-chat" aria-label="Подсказки для нового чата">
                   <div className="empty-chat-mark">
                     <Icon name="spark" />
                   </div>
-                  <h2>What can I help with?</h2>
+                  <h2>Чем могу помочь?</h2>
                   <div className="prompt-grid">
                     {promptSuggestions.map((suggestion) => (
                       <button key={suggestion} className="prompt-card" type="button" onClick={() => setDraft(suggestion)}>
@@ -1097,23 +1174,23 @@ export default function App() {
               <textarea
                 aria-label="Message input"
                 className="composer-input"
-                placeholder="Write a message"
+                placeholder="Введите сообщение"
                 rows={1}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
               />
-              <button aria-label="Send message" className="composer-submit" disabled={!canSend} type="submit">
+              <button aria-label="Отправить сообщение" className="composer-submit" disabled={!canSend} type="submit">
                 <Icon name="send" />
               </button>
             </form>
           </div>
 
           {contextOpen ? (
-            <aside className="context-panel" aria-label="Context panel">
+            <aside className="context-panel" aria-label="Панель контекста">
               <div className="context-panel-header">
-                <h2>References</h2>
+                <h2>Материалы</h2>
                 <button
-                  aria-label="Close context panel"
+                  aria-label="Закрыть панель контекста"
                   className="context-close"
                   type="button"
                   onClick={() => setContextOpen(false)}
@@ -1125,7 +1202,7 @@ export default function App() {
               <div className="context-panel-body">
                 {dashboardActivities.length > 0 ? (
                   <section className="context-card">
-                    <h3>Recent activity</h3>
+                    <h3>Недавняя активность</h3>
                     <div className="activity-list">
                       {dashboardActivities.map((activity) => (
                         <div key={`${activity.category}-${activity.title}`} className="activity-item">
@@ -1139,8 +1216,8 @@ export default function App() {
                 ) : null}
 
                 <section className="context-card">
-                  <h3>Knowledge graph</h3>
-                  <p>Reserved for entities, connected nodes, and graph exploration widgets.</p>
+                  <h3>Граф знаний</h3>
+                  <p>Место для сущностей, связанных узлов и виджетов исследования графа.</p>
                 </section>
               </div>
             </aside>

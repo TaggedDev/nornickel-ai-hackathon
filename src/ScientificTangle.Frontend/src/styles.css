@@ -277,16 +277,7 @@ path {
 }
 
 .profile-menu {
-  position: absolute;
-  right: 0.875rem;
-  bottom: calc(100% + 0.5rem);
-  left: 0.875rem;
-  z-index: 3;
-  padding: 0.375rem;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg);
-  background: #2f2f2f;
-  box-shadow: var(--shadow-overlay);
+  position: relative;
 }
 
 .profile-menu-item {
@@ -367,7 +358,7 @@ path {
   padding-inline: 0.5rem;
 }
 
-.sidebar-collapsed .profile-menu {
+.sidebar-collapsed .profile-menu-popover {
   right: auto;
   left: 0.5rem;
   width: 150px;
@@ -1008,6 +999,29 @@ path {
 
 .text-field:focus {
   border-color: rgba(138, 180, 248, 0.65);
+}
+
+.role-select {
+  min-height: 52px;
+  color: #ffffff;
+  background: #2f2f2f;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.role-select option {
+  color: #111827;
+  background: #ffffff;
+  white-space: normal;
+}
+
+.text-field-error {
+  border-color: #f87171;
+  background: rgba(127, 29, 29, 0.16);
+}
+
+.text-field-error:focus {
+  border-color: #fca5a5;
 }
 
 .checkbox-field {
