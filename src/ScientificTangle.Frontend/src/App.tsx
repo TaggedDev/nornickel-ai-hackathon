@@ -31,7 +31,8 @@ type IconName =
   | "menu"
   | "profile"
   | "chevron"
-  | "close";
+  | "close"
+  | "send";
 
 const SIDEBAR_STORAGE_KEY = "scientific-tangle-sidebar-mode";
 const CONTEXT_STORAGE_KEY = "scientific-tangle-context-open";
@@ -72,6 +73,13 @@ const messages: Message[] = [
     role: "assistant",
     text: "The left sidebar stays visible on desktop, collapses into an icon rail, and becomes a drawer on mobile.",
   },
+];
+
+const promptSuggestions = [
+  "Summarize nickel production risks",
+  "Compare processing scenarios",
+  "Draft knowledge graph entities",
+  "Prepare metallurgical questions",
 ];
 
 function useIsMobile() {
@@ -171,6 +179,11 @@ function Icon({ name }: { name: IconName }) {
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       ) : null}
+      {name === "send" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M4 12l16-8-5 16-3-7-8-1z" />
+        </svg>
+      ) : null}
     </span>
   );
 }
@@ -185,6 +198,8 @@ export default function App() {
   const [activeNav, setActiveNav] = useState("new");
   const [activeChatId, setActiveChatId] = useState("r1");
   const [draft, setDraft] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   useEffect(() => {
@@ -218,10 +233,15 @@ export default function App() {
   }
 
   function handleSelectChat(chatId: string) {
+    setActiveNav("chat");
     setActiveChatId(chatId);
     if (isMobile) {
       setMobileSidebarOpen(false);
     }
+  }
+
+  function handleLogout() {
+    setProfileMenuOpen(false);
   }
 
   function handleTouchStart(clientX: number) {
@@ -253,6 +273,13 @@ export default function App() {
 
   const allChats = [...pinnedChats, ...recentChats];
   const activeChat = allChats.find((chat) => chat.id === activeChatId) ?? recentChats[0];
+  const isNewChat = activeNav === "new";
+  const isSearchChats = activeNav === "search";
+  const canSend = draft.trim().length > 0;
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const searchResults = normalizedSearchQuery
+    ? allChats.filter((chat) => chat.title.toLowerCase().includes(normalizedSearchQuery))
+    : allChats;
 
   return (
     <div className="app-shell">
@@ -372,11 +399,21 @@ export default function App() {
         </div>
 
         <div className="sidebar-profile">
+          {profileMenuOpen ? (
+            <div className="profile-menu" role="menu" aria-label="User menu">
+              <button className="profile-menu-item" type="button" role="menuitem" onClick={handleLogout}>
+                Logout
+              </button>
+            </div>
+          ) : null}
+
           <button
+            aria-expanded={profileMenuOpen}
             aria-label={!sidebarExpanded ? "User profile" : undefined}
             className="profile-button"
             title={!sidebarExpanded ? "User profile" : undefined}
             type="button"
+            onClick={() => setProfileMenuOpen((value) => !value)}
           >
             <span className="profile-avatar">
               <Icon name="profile" />
@@ -411,8 +448,8 @@ export default function App() {
             ) : null}
 
             <div>
-              <p className="main-header-kicker">Active chat</p>
-              <h1>{activeChat.title}</h1>
+              <p className="main-header-kicker">Scientific Tangle</p>
+              <h1>{isSearchChats ? "Search chats" : isNewChat ? "New chat" : activeChat.title}</h1>
             </div>
           </div>
 
@@ -429,16 +466,68 @@ export default function App() {
         <section className={`workspace ${contextOpen ? "workspace-with-context" : ""}`}>
           <div className="conversation-panel" aria-label="Conversation">
             <div className="message-list">
-              {messages.map((message) => (
-                <article
-                  key={message.id}
-                  className={`message-row ${message.role === "user" ? "message-row-user" : "message-row-assistant"}`}
-                >
-                  <div className={`message-bubble message-bubble-${message.role}`}>
-                    <p>{message.text}</p>
+              {isSearchChats ? (
+                <section className="search-chat-view" aria-label="Search chats">
+                  <div className="search-chat-panel">
+                    <div className="search-chat-heading">
+                      <h2>Search chats</h2>
+                      <p>Find a previous conversation by title.</p>
+                    </div>
+                    <label className="search-chat-field">
+                      <Icon name="search" />
+                      <input
+                        aria-label="Search chats"
+                        placeholder="Search chats..."
+                        type="search"
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                      />
+                    </label>
+                    <div className="search-chat-results" role="list">
+                      {searchResults.length > 0 ? (
+                        searchResults.map((chat) => (
+                          <button
+                            key={chat.id}
+                            className="search-chat-result"
+                            type="button"
+                            onClick={() => handleSelectChat(chat.id)}
+                          >
+                            <Icon name="chat" />
+                            <span>{chat.title}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="search-chat-empty">No chats found</p>
+                      )}
+                    </div>
                   </div>
-                </article>
-              ))}
+                </section>
+              ) : isNewChat ? (
+                <section className="empty-chat" aria-label="New chat suggestions">
+                  <div className="empty-chat-mark">
+                    <Icon name="spark" />
+                  </div>
+                  <h2>What can I help with?</h2>
+                  <div className="prompt-grid">
+                    {promptSuggestions.map((suggestion) => (
+                      <button key={suggestion} className="prompt-card" type="button" onClick={() => setDraft(suggestion)}>
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : (
+                messages.map((message) => (
+                  <article
+                    key={message.id}
+                    className={`message-row ${message.role === "user" ? "message-row-user" : "message-row-assistant"}`}
+                  >
+                    <div className={`message-bubble message-bubble-${message.role}`}>
+                      <p>{message.text}</p>
+                    </div>
+                  </article>
+                ))
+              )}
             </div>
 
             <form className="composer" onSubmit={(event) => event.preventDefault()}>
@@ -450,8 +539,8 @@ export default function App() {
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
               />
-              <button className="composer-submit" type="submit">
-                Send
+              <button aria-label="Send message" className="composer-submit" disabled={!canSend} type="submit">
+                <Icon name="send" />
               </button>
             </form>
           </div>
