@@ -1,0 +1,44 @@
+# Build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+out/
+
+# .NET user files
+*.user
+*.rsuser
+*.suo
+
+# NuGet
+packages/
+
+# Frontend
+node_modules/
+dist/
+.vite/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs
+.vs/
+.idea/
+!.idea/.gitignore
+
+# Rider shared run configs
+!.run/
+!.run/*.run.xml
+
+# OS files
+.DS_Store
+Thumbs.db
