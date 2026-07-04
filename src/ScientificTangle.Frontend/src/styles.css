@@ -1197,7 +1197,7 @@ path {
 .profile-menu-popover {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 0.5rem);
+  bottom: 100%;
   display: none;
   min-width: 220px;
   padding: 0.45rem;
