@@ -12,18 +12,18 @@ public class DashboardController : ControllerBase
     public ActionResult<DashboardOverviewResponse> GetOverview()
     {
         return Ok(new DashboardOverviewResponse("Scientific Tangle",
-            "Platform for working with scientific knowledge, hypotheses, and related materials.",
+            "Платформа для работы с научными знаниями, гипотезами и связанными материалами.",
             new[]
             {
-                new DashboardMetric("Connected sources", "03", "Knowledge sources ready for indexing."),
-                new DashboardMetric("Active pipelines", "05", "Processing and enrichment flows available."),
-                new DashboardMetric("Open reviews", "12", "Records waiting for expert validation.")
+                new DashboardMetric("Подключённые источники", "03", "Источники знаний готовы к индексации."),
+                new DashboardMetric("Активные пайплайны", "05", "Доступны процессы обработки и обогащения."),
+                new DashboardMetric("Открытые проверки", "12", "Записи ожидают экспертной валидации.")
             },
             new[]
             {
-                new DashboardActivity("Ingestion", "ArXiv import completed", "2 minutes ago"),
-                new DashboardActivity("Review", "Similarity check queued for 8 papers", "12 minutes ago"),
-                new DashboardActivity("Insights", "New relationship graph generated", "28 minutes ago")
+                new DashboardActivity("Загрузка", "Импорт ArXiv завершён", "2 минуты назад"),
+                new DashboardActivity("Проверка", "Проверка сходства для 8 статей добавлена в очередь", "12 минут назад"),
+                new DashboardActivity("Инсайты", "Новый граф связей сформирован", "28 минут назад")
             }));
     }
 
