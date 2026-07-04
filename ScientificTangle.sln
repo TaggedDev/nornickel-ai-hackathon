@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScientificTangle.Applicatio
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScientificTangle.Contracts", "src\ScientificTangle.Contracts\ScientificTangle.Contracts.csproj", "{3AD6EE84-B0D5-4733-AABF-913AF81F8587}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScientificTangle.Infrastructure", "src\ScientificTangle.Infrastructure\ScientificTangle.Infrastructure.csproj", "{9D272DDA-8361-4FCE-B431-6DF2625A3CE2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{3AD6EE84-B0D5-4733-AABF-913AF81F8587}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3AD6EE84-B0D5-4733-AABF-913AF81F8587}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3AD6EE84-B0D5-4733-AABF-913AF81F8587}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9D272DDA-8361-4FCE-B431-6DF2625A3CE2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D272DDA-8361-4FCE-B431-6DF2625A3CE2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9D272DDA-8361-4FCE-B431-6DF2625A3CE2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9D272DDA-8361-4FCE-B431-6DF2625A3CE2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -18,7 +18,9 @@ export type DashboardOverview = {
 };
 
 export async function fetchOverview(): Promise<DashboardOverview> {
-  const response = await fetch("/api/dashboard/overview");
+  const response = await fetch("/api/dashboard/overview", {
+    credentials: "include",
+  });
 
   if (!response.ok) {
     throw new Error(`Overview request failed with status ${response.status}`);
