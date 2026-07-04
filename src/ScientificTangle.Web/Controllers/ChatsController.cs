@@ -112,7 +112,11 @@ public sealed class ChatsController : ControllerBase
                 context.Graph.Nodes.Select(Map).ToList(),
                 context.Graph.Edges.Select(Map).ToList()),
             context.Documents.Select(Map).ToList(),
-            context.RepresentedNodeIds);
+            context.RepresentedNodeIds,
+            context.Search is null ? null : Map(context.Search));
+
+    private static ChatKnowledgeSearchMetaDto Map(ChatKnowledgeSearchMeta meta)
+        => new(meta.Query, meta.Intent, meta.RetrievedFacts, meta.UsedFacts, meta.Model, meta.NoData);
 
     private static KnowledgeGraphNodeDto Map(KnowledgeGraphNode node)
         => new(node.Id, node.Type, node.Label, node.CanonicalName, node.Aliases, node.Properties);

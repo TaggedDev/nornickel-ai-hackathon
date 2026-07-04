@@ -76,6 +76,16 @@ type ChatKnowledgeContext = {
   };
   documents: ReferencedDocument[];
   representedNodeIds: string[];
+  search: ChatKnowledgeSearchMeta | null;
+};
+
+type ChatKnowledgeSearchMeta = {
+  query: string;
+  intent: string;
+  retrievedFacts: number;
+  usedFacts: number;
+  model: string | null;
+  noData: boolean;
 };
 
 type AppRoute = "/" | "/auth" | "/access-denied";
@@ -190,6 +200,7 @@ function buildKnowledgeContextFromApiResponse(context: ChatKnowledgeContextRespo
       downloadUrl: document.downloadUrl,
     })),
     representedNodeIds: context.representedNodeIds,
+    search: context.search,
   };
 }
 
@@ -674,6 +685,27 @@ function ContextPanelContent({
 }) {
   return (
     <>
+      {context.search ? (
+        <section className="search-meta-section" aria-label="Метаданные ответа">
+          <div>
+            <span>Intent</span>
+            <strong>{context.search.intent}</strong>
+          </div>
+          <div>
+            <span>Model</span>
+            <strong>{context.search.model ?? "unknown"}</strong>
+          </div>
+          <div>
+            <span>Facts</span>
+            <strong>{context.search.usedFacts}/{context.search.retrievedFacts}</strong>
+          </div>
+          <div>
+            <span>No data</span>
+            <strong>{context.search.noData ? "true" : "false"}</strong>
+          </div>
+        </section>
+      ) : null}
+
       <section className="graph-preview-section" aria-label="Превью графа знаний">
         <div className="graph-preview-header">
           <h3>Граф знаний</h3>
@@ -1280,10 +1312,15 @@ export default function App() {
         if (chats.length > 0 && activeNav !== "chat") {
           setActiveChatId(chats[0].id);
         }
-      } catch (error) {
-        console.error(error);
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        handleUnauthorizedSession();
+        return;
       }
+
+      console.error(error);
     }
+  }
 
     void loadChats();
 
@@ -1308,6 +1345,19 @@ export default function App() {
       setIsLoggingOut(false);
       navigate("/auth");
     }
+  }
+
+  function handleUnauthorizedSession() {
+    setCurrentUser(null);
+    setActiveNav("new");
+    setActiveChatId("");
+    setChatRequestError(null);
+    setIsAnswering(false);
+    navigate("/auth");
+  }
+
+  function isUnauthorizedError(error: unknown) {
+    return error instanceof ApiError && error.status === 401;
   }
 
   function handleCitationHover(docId: string, citationNum: number) {
@@ -1388,10 +1438,15 @@ export default function App() {
           [chat.id]: buildKnowledgeContextFromApiResponse(chat.knowledgeContext!),
         }));
       }
-    } catch (error) {
-      console.error(error);
+      } catch (error) {
+        if (isUnauthorizedError(error)) {
+          handleUnauthorizedSession();
+          return;
+        }
+
+        console.error(error);
+      }
     }
-  }
 
   async function handlePromptSubmit(text: string) {
     await submitMessage(text);
@@ -1466,6 +1521,17 @@ export default function App() {
       setActiveChatId(chat.id);
       setActiveNav("chat");
     } catch (error) {
+      if (isUnauthorizedError(error)) {
+        setRecentChatItems((items) => items.filter((item) => item.id !== optimisticChatId));
+        setChatMessagesById((messagesById) => {
+          const nextMessagesById = { ...messagesById };
+          delete nextMessagesById[optimisticChatId];
+          return nextMessagesById;
+        });
+        handleUnauthorizedSession();
+        return;
+      }
+
       const appError = extractAppError(error);
       setChatRequestError(appError.message);
       setChatMessagesById((messagesById) => ({

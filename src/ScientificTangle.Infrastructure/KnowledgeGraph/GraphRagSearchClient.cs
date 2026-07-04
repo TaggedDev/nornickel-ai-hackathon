@@ -107,7 +107,14 @@ public sealed class GraphRagSearchClient : IKnowledgeGraphSearchClient
         return new ChatKnowledgeContext(
             new KnowledgeGraphSnapshot(nodes, edges),
             documents,
-            nodes.Select(node => node.Id).ToList());
+            nodes.Select(node => node.Id).ToList(),
+            new ChatKnowledgeSearchMeta(
+                payload.Query ?? string.Empty,
+                payload.Intent ?? "lookup",
+                payload.Meta?.RetrievedFacts ?? 0,
+                payload.Meta?.UsedFacts ?? 0,
+                payload.Meta?.Model,
+                payload.Meta?.NoData ?? false));
     }
 
     private static IReadOnlyDictionary<string, string> MapProperties(IReadOnlyDictionary<string, JsonElement>? props)

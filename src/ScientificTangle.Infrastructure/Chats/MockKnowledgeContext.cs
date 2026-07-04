@@ -82,7 +82,8 @@ internal static class MockKnowledgeContext
         return new ChatKnowledgeContext(
             new KnowledgeGraphSnapshot(nodes, edges),
             documents,
-            nodes.Select(node => node.Id).ToList());
+            nodes.Select(node => node.Id).ToList(),
+            null);
     }
 
     private static KnowledgeGraphNode Node(

@@ -35,4 +35,13 @@ public sealed record ReferencedDocumentDto(
 public sealed record ChatKnowledgeContextDto(
     KnowledgeGraphDto Graph,
     IReadOnlyCollection<ReferencedDocumentDto> Documents,
-    IReadOnlyCollection<string> RepresentedNodeIds);
+    IReadOnlyCollection<string> RepresentedNodeIds,
+    ChatKnowledgeSearchMetaDto? Search);
+
+public sealed record ChatKnowledgeSearchMetaDto(
+    string Query,
+    string Intent,
+    int RetrievedFacts,
+    int UsedFacts,
+    string? Model,
+    bool NoData);

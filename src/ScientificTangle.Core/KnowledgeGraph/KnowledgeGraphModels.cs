@@ -34,4 +34,13 @@ public sealed record ReferencedDocument(
 public sealed record ChatKnowledgeContext(
     KnowledgeGraphSnapshot Graph,
     IReadOnlyCollection<ReferencedDocument> Documents,
-    IReadOnlyCollection<string> RepresentedNodeIds);
+    IReadOnlyCollection<string> RepresentedNodeIds,
+    ChatKnowledgeSearchMeta? Search);
+
+public sealed record ChatKnowledgeSearchMeta(
+    string Query,
+    string Intent,
+    int RetrievedFacts,
+    int UsedFacts,
+    string? Model,
+    bool NoData);
