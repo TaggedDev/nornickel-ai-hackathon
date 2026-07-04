@@ -48,8 +48,7 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
-    var dbContext = services.GetRequiredService<ScientificTangleIdentityDbContext>();
-    await dbContext.Database.EnsureCreatedAsync();
+    await services.ApplyDatabaseMigrationsAsync();
 
     var roleManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.RoleManager<ApplicationRole>>();
     await RoleSeeder.SeedAsync(roleManager);
