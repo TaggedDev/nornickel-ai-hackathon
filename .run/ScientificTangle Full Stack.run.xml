@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="ScientificTangle Full Stack" type="CompoundRunConfigurationType" factoryName="Compound">
+    <toRun name="ScientificTangle Backend" type="DotNetProject" />
+    <toRun name="ScientificTangle Frontend" type="js.build_tools.npm" />
+    <method v="2" />
+  </configuration>
+</component>

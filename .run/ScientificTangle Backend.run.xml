@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="ScientificTangle Backend" type="DotNetProject" factoryName=".NET Project">
+    <option name="EXE_PATH" />
+    <option name="PROGRAM_PARAMETERS" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src/ScientificTangle.Web" />
+    <option name="PASS_PARENT_ENVS_2" value="true" />
+    <option name="PROJECT_PATH" value="$PROJECT_DIR$/src/ScientificTangle.Web/ScientificTangle.Web.csproj" />
+    <option name="PROJECT_EXE_PATH_TRACKING" value="project" />
+    <option name="LAUNCH_PROFILE" value="http" />
+    <method v="2" />
+  </configuration>
+</component>

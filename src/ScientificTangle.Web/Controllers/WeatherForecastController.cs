@@ -6,5 +6,4 @@ namespace ScientificTangle.Web.Controllers;
 [Route("[controller]")]
 public class WeatherForecastController : ControllerBase
 {
-    
 }
