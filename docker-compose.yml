@@ -31,6 +31,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - dataprotection-keys:/app/DataProtectionKeys
 
   frontend:
     build:
@@ -43,3 +45,4 @@ services:
 
 volumes:
   pgdata:
+  dataprotection-keys:

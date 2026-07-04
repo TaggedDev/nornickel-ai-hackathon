@@ -867,6 +867,35 @@ path {
   padding: 1rem;
 }
 
+.search-meta-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  padding: 1rem 1rem 0;
+}
+
+.search-meta-section div {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.search-meta-section span {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.search-meta-section strong {
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .graph-preview-header,
 .document-section-header,
 .graph-modal-header {

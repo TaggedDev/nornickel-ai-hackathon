@@ -34,6 +34,16 @@ export type ChatKnowledgeContextResponse = {
   };
   documents: ReferencedDocumentResponse[];
   representedNodeIds: string[];
+  search: ChatKnowledgeSearchMetaResponse | null;
+};
+
+export type ChatKnowledgeSearchMetaResponse = {
+  query: string;
+  intent: string;
+  retrievedFacts: number;
+  usedFacts: number;
+  model: string | null;
+  noData: boolean;
 };
 
 export type KnowledgeGraphNodeResponse = {

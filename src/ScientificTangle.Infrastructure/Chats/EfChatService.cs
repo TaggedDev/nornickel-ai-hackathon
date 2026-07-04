@@ -87,7 +87,8 @@ public sealed class EfChatService : IChatService
             return null;
         }
 
-        chat.AddMessage(ChatMessageSender.User, messageText, DateTime.UtcNow);
+        var userMessage = chat.AddMessage(ChatMessageSender.User, messageText, DateTime.UtcNow);
+        _dbContext.ChatMessages.Add(userMessage);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await AddAssistantAnswerAsync(chat, messageText, cancellationToken);
@@ -182,7 +183,8 @@ public sealed class EfChatService : IChatService
         try
         {
             var searchResult = await _knowledgeGraphSearchClient.SearchAsync(messageText, cancellationToken);
-            chat.AddMessage(ChatMessageSender.Assistant, searchResult.AnswerMarkdown, DateTime.UtcNow);
+            var assistantMessage = chat.AddMessage(ChatMessageSender.Assistant, searchResult.AnswerMarkdown, DateTime.UtcNow);
+            _dbContext.ChatMessages.Add(assistantMessage);
             chat.SetKnowledgeContext(searchResult.Context);
         }
         catch (OperationCanceledException)
@@ -192,9 +194,10 @@ public sealed class EfChatService : IChatService
         catch (Exception exception)
         {
             _logger.LogError(exception, "GraphRAG search failed for chat {ChatId}.", chat.Id);
-            chat.AddMessage(ChatMessageSender.Assistant,
+            var assistantMessage = chat.AddMessage(ChatMessageSender.Assistant,
                 "Не удалось получить ответ из базы знаний. Попробуйте повторить запрос позже.",
                 DateTime.UtcNow);
+            _dbContext.ChatMessages.Add(assistantMessage);
         }
     }
 
