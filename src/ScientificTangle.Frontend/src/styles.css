@@ -376,41 +376,6 @@ path {
   background: var(--bg-main);
 }
 
-.overview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-  padding: 1.5rem 1.5rem 0;
-}
-
-.overview-card {
-  display: grid;
-  gap: 0.3rem;
-  padding: 1rem;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg);
-  background: var(--bg-panel);
-}
-
-.overview-card strong,
-.overview-card h2,
-.overview-card p {
-  margin: 0;
-}
-
-.overview-card strong {
-  font-size: 1.4rem;
-}
-
-.overview-card h2 {
-  font-size: 0.95rem;
-}
-
-.overview-card p {
-  color: var(--text-muted);
-  font-size: 0.88rem;
-}
-
 .main-header {
   display: flex;
   align-items: center;
@@ -1134,11 +1099,6 @@ path {
 
   .workspace-with-context {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .overview-grid {
-    grid-template-columns: 1fr;
-    padding-inline: 1rem;
   }
 
   .context-panel {

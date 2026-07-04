@@ -8,7 +8,6 @@ import {
   register,
   type ValidationErrors,
 } from "./shared/api/auth";
-import { fetchOverview, type DashboardOverview } from "./shared/api/dashboard";
 
 type NavItem = {
   id: string;
@@ -733,8 +732,6 @@ export default function App() {
   const [draft, setDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [overview, setOverview] = useState<DashboardOverview | null>(null);
-  const [overviewError, setOverviewError] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -766,7 +763,6 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) {
-      setOverview(null);
       if (route !== "/auth") {
         navigate("/auth");
       }
@@ -778,43 +774,10 @@ export default function App() {
       return;
     }
 
-    let isActive = true;
-    setOverviewError(null);
-    void fetchOverview()
-      .then((payload) => {
-        if (!isActive) {
-          return;
-        }
-
-        setOverview(payload);
-      })
-      .catch((error: Error) => {
-        if (!isActive) {
-          return;
-        }
-
-        if (error.message.includes("401")) {
-          setCurrentUser(null);
-          navigate("/auth");
-          return;
-        }
-
-        if (error.message.includes("403")) {
-          navigate("/access-denied");
-          return;
-        }
-
-        setOverviewError("Не удалось загрузить данные панели.");
-      });
-
-    return () => {
-      isActive = false;
-    };
   }, [currentUser, route]);
 
   function handleAuthSuccess(user: AuthUser) {
     setCurrentUser(user);
-    setOverviewError(null);
     navigate("/");
   }
 
@@ -890,7 +853,6 @@ export default function App() {
     ? allChats.filter((chat) => chat.title.toLowerCase().includes(normalizedSearchQuery))
     : allChats;
   const profileLabel = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "User";
-  const dashboardActivities = overview?.activities ?? [];
   const welcomeTitle = useMemo(() => {
     if (isSearchChats) {
       return "Поиск чатов";
@@ -900,8 +862,8 @@ export default function App() {
       return "Новый чат";
     }
 
-    return overview?.productName ?? activeChat.title;
-  }, [activeChat.title, isNewChat, isSearchChats, overview?.productName]);
+    return activeChat.title;
+  }, [activeChat.title, isNewChat, isSearchChats]);
 
   if (route === "/auth") {
     return (
@@ -1103,8 +1065,6 @@ export default function App() {
 
         <section className={`workspace ${contextOpen ? "workspace-with-context" : ""}`}>
           <div className="conversation-panel" aria-label="Диалог">
-            {overviewError ? <div className="inline-status">{overviewError}</div> : null}
-
             <div className="message-list">
               {isSearchChats ? (
                 <section className="search-chat-view" aria-label="Поиск чатов">
@@ -1200,20 +1160,6 @@ export default function App() {
               </div>
 
               <div className="context-panel-body">
-                {dashboardActivities.length > 0 ? (
-                  <section className="context-card">
-                    <h3>Недавняя активность</h3>
-                    <div className="activity-list">
-                      {dashboardActivities.map((activity) => (
-                        <div key={`${activity.category}-${activity.title}`} className="activity-item">
-                          <strong>{activity.category}</strong>
-                          <p>{activity.title}</p>
-                          <span>{activity.timestamp}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
 
                 <section className="context-card">
                   <h3>Граф знаний</h3>
