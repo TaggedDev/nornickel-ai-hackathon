@@ -290,10 +290,10 @@ function buildKnowledgeContextFromLlmResponse(response: MockSearchResponse): Cha
 }
 
 const promptSuggestions = [
-  "Суммировать риски производства никеля",
-  "Сравнить сценарии переработки",
-  "Подготовить сущности графа знаний",
-  "Сформулировать вопросы по металлургии",
+  "Какие методы обессоливания воды подходят для обогатительной фабрики, если исходная вода содержит сульфаты, хлориды, Ca, Mg, Na по 200–300 мг/л, а требуемый сухой остаток — ≤1000 мг/дм³?",
+  "Какие технические решения организации циркуляции католита при электроэкстракции никеля описаны в мировой практике, и какая скорость потока считается оптимальной?",
+  "Покажите все эксперименты и публикации по распределению Au, Ag и МПГ между медным/никелевым штейном и шлаком за последние 5 лет.",
+  "Какие способы закачки шахтных вод в глубокие горизонты применялись в России и за рубежом, и каковы их технико-экономические показатели?",
 ];
 
 const initialLoginForm: LoginFormState = {
@@ -1422,6 +1422,32 @@ export default function App() {
     }
   }
 
+  function handlePromptSubmit(text: string) {
+    const now = Date.now();
+    const targetChatId = `local-${now}`;
+    const userMessage: Message = {
+      id: `${targetChatId}-user-${now}`,
+      role: "user",
+      text,
+    };
+    const assistantMessage: Message = {
+      id: `${targetChatId}-assistant-${now}`,
+      role: "assistant",
+      text: createMockAssistantAnswer(text),
+    };
+    const newChat: ChatItem = {
+      id: targetChatId,
+      title: createLocalChatTitle(text),
+    };
+    setRecentChatItems((items) => [newChat, ...items]);
+    setChatMessagesById((messagesById) => ({
+      ...messagesById,
+      [targetChatId]: [userMessage, assistantMessage],
+    }));
+    setActiveChatId(targetChatId);
+    setActiveNav("chat");
+  }
+
   function handleSubmitMessage() {
     const messageText = draft.trim();
     if (!messageText) {
@@ -1764,7 +1790,7 @@ export default function App() {
                   <h2>Чем могу помочь?</h2>
                   <div className="prompt-grid">
                     {promptSuggestions.map((suggestion) => (
-                      <button key={suggestion} className="prompt-card" type="button" onClick={() => setDraft(suggestion)}>
+                      <button key={suggestion} className="prompt-card" type="button" onClick={() => handlePromptSubmit(suggestion)}>
                         {suggestion}
                       </button>
                     ))}
