@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type PointerEvent, type ReactNode, type WheelEvent, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type WheelEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
   type AuthUser,
@@ -151,36 +151,77 @@ const navItems: NavItem[] = [
 ];
 
 const pinnedChats: ChatItem[] = [
-  { id: "p1", title: "Обзор технологической цепочки никеля" },
-  { id: "p2", title: "Сводка по обогащению сульфидной руды" },
+  { id: "p1", title: "Дашборд отклонений по производству никеля" },
+  { id: "p2", title: "Карта знаний по технологической цепочке" },
+  { id: "p3", title: "Риски плавильного передела за неделю" },
+  { id: "p4", title: "Сводка KPI для утреннего штаба" },
 ];
 
-const recentChats: ChatItem[] = [
-  { id: "r1", title: "Новый чат" },
-  { id: "r2", title: "Собрать вопросы для LLM по металлургическим ограничениям" },
-  { id: "r3", title: "Сравнить сценарии переработки концентрата по энергозатратам" },
-  { id: "r4", title: "Подготовить структуру графа знаний для потоков сырья" },
-  { id: "r5", title: "Перечислить риски перехода на новый режим печи" },
-  { id: "r6", title: "Сравнить квартальные отчёты о потерях производства" },
+const seededDemoChatId = "demo-loss-reduction-dialog";
+
+const initialRecentChats: ChatItem[] = [
+  { id: seededDemoChatId, title: "Диалог по снижению потерь металла" },
+  { id: "r1", title: "Проанализировать причины снижения извлечения металла" },
+  { id: "r2", title: "Сравнить сценарии переработки медно-никелевого концентрата" },
+  { id: "r3", title: "Подготовить вопросы к отчёту по обогащению руды" },
+  { id: "r4", title: "Найти связи между простоем оборудования и качеством сырья" },
+  { id: "r5", title: "Сформировать краткую сводку по энергопотреблению" },
+  { id: "r6", title: "Оценить влияние влажности шихты на режим печи" },
+  { id: "r7", title: "Собрать гипотезы по потерям металла в хвостах" },
+  { id: "r8", title: "Построить структуру графа знаний для фабрики" },
+  { id: "r9", title: "Выделить ключевые события из сменного журнала" },
+  { id: "r10", title: "Сравнить показатели цехов за последний квартал" },
+  { id: "r11", title: "Подготовить резюме по аварийным остановкам" },
+  { id: "r12", title: "Сформулировать SQL-запрос для анализа простоев" },
+  { id: "r13", title: "Объяснить отклонения в расходе реагентов" },
+  { id: "r14", title: "Сопоставить лабораторные пробы и параметры процесса" },
+  { id: "r15", title: "Сделать план внедрения LLM-ассистента на участке" },
+  { id: "r16", title: "Проверить корректность терминов в технологическом отчёте" },
+  { id: "r17", title: "Найти узкие места в цепочке поставки сырья" },
+  { id: "r18", title: "Подготовить тезисы для презентации по цифровизации" },
+  { id: "r19", title: "Собрать список сущностей для промышленной онтологии" },
+  { id: "r20", title: "Оценить риски изменения температурного режима" },
+  { id: "r21", title: "Сравнить фактический выпуск с производственным планом" },
+  { id: "r22", title: "Проверить аномалии в данных датчиков флотации" },
+  { id: "r23", title: "Составить чек-лист для анализа качества концентрата" },
+  { id: "r24", title: "Суммировать переписку по ремонту дробильного оборудования" },
+  { id: "r25", title: "Предложить метрики для мониторинга технологического режима" },
+  { id: "r26", title: "Разобрать причины роста себестоимости передела" },
+  { id: "r27", title: "Подготовить набор промптов для производственного аналитика" },
+  { id: "r28", title: "Выявить зависимости между сортом руды и выходом концентрата" },
+  { id: "r29", title: "Составить краткий отчёт по экологическим показателям" },
+  { id: "r30", title: "Сравнить варианты оптимизации логистики концентрата" },
+  { id: "r31", title: "Объяснить модель прогнозирования отказов оборудования" },
+  { id: "r32", title: "Подготовить план проверки качества данных MES" },
+  { id: "r33", title: "Сгенерировать вопросы для интервью с технологом" },
+  { id: "r34", title: "Свести замечания экспертов по графу знаний" },
+  { id: "r35", title: "Сформировать сценарий демонстрации AI-ассистента" },
 ];
 
-const messages: Message[] = [
-  {
-    id: "m1",
-    role: "assistant",
-    text: "Интерфейс использует тёмную оболочку с навигацией, историей чатов и контекстной боковой панелью.",
-  },
-  {
-    id: "m2",
-    role: "user",
-    text: "Собери интерфейс в стиле ChatGPT, но оставь его универсальным и подходящим для кастомного продукта.",
-  },
-  {
-    id: "m3",
-    role: "assistant",
-    text: "Левая панель видна на десктопе, сворачивается до панели иконок и становится выдвижным меню на мобильных устройствах.",
-  },
-];
+const initialChatMessagesById: Record<string, Message[]> = {
+  [seededDemoChatId]: [
+    {
+      id: "seeded-demo-user-1",
+      role: "user",
+      text: "Нужно быстро понять, почему выросли потери металла в хвостах за последнюю неделю.",
+    },
+    {
+      id: "seeded-demo-assistant-1",
+      role: "assistant",
+      text: "Сначала стоит сравнить распределение по сменам, влажность сырья, расход реагентов и долю тонких классов. Эти факторы чаще всего дают резкий рост потерь.",
+    },
+    {
+      id: "seeded-demo-user-2",
+      role: "user",
+      text: "Какие данные лучше проверить в первую очередь?",
+    },
+    {
+      id: "seeded-demo-assistant-2",
+      role: "assistant",
+      text: "Начните с трёх срезов: лабораторные пробы хвостов по дням, параметры флотации по сменам и журнал простоев оборудования. Если пики совпадут по времени, можно сузить причину до конкретного участка.",
+    },
+  ],
+};
 
 const llmSearchResponse = searchCatholyteMock as MockSearchResponse;
 
@@ -1241,7 +1282,9 @@ export default function App() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(() => readStorageFlag(CONTEXT_STORAGE_KEY, "open", false));
   const [activeNav, setActiveNav] = useState("new");
-  const [activeChatId, setActiveChatId] = useState("r1");
+  const [activeChatId, setActiveChatId] = useState(seededDemoChatId);
+  const [recentChatItems, setRecentChatItems] = useState<ChatItem[]>(initialRecentChats);
+  const [chatMessagesById, setChatMessagesById] = useState<Record<string, Message[]>>(initialChatMessagesById);
   const [draft, setDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -1292,6 +1335,15 @@ export default function App() {
     }
 
   }, [currentUser, route]);
+
+  function createLocalChatTitle(messageText: string) {
+    const normalized = messageText.replace(/\s+/g, " ").trim();
+    return normalized.length > 54 ? `${normalized.slice(0, 54)}...` : normalized;
+  }
+
+  function createMockAssistantAnswer(messageText: string) {
+    return `Принял запрос: «${messageText}». Для демо я подготовлю краткий ответ и могу продолжить анализ по этой теме.`;
+  }
 
   function handleAuthSuccess(user: AuthUser) {
     setCurrentUser(user);
@@ -1370,6 +1422,51 @@ export default function App() {
     }
   }
 
+  function handleSubmitMessage() {
+    const messageText = draft.trim();
+    if (!messageText) {
+      return;
+    }
+
+    const now = Date.now();
+    const targetChatId = activeNav === "chat" ? activeChatId : `local-${now}`;
+    const userMessage: Message = {
+      id: `${targetChatId}-user-${now}`,
+      role: "user",
+      text: messageText,
+    };
+    const assistantMessage: Message = {
+      id: `${targetChatId}-assistant-${now}`,
+      role: "assistant",
+      text: createMockAssistantAnswer(messageText),
+    };
+
+    if (activeNav !== "chat") {
+      const newChat: ChatItem = {
+        id: targetChatId,
+        title: createLocalChatTitle(messageText),
+      };
+      setRecentChatItems((items) => [newChat, ...items]);
+    }
+
+    setChatMessagesById((messagesById) => ({
+      ...messagesById,
+      [targetChatId]: [...(messagesById[targetChatId] ?? []), userMessage, assistantMessage],
+    }));
+    setActiveChatId(targetChatId);
+    setActiveNav("chat");
+    setDraft("");
+  }
+
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+    handleSubmitMessage();
+  }
+
   function handleTouchStart(clientX: number) {
     if (isMobile) {
       setTouchStartX(clientX);
@@ -1397,23 +1494,18 @@ export default function App() {
     .filter(Boolean)
     .join(" ");
 
-  const allChats = [...pinnedChats, ...recentChats];
-  const activeChat = allChats.find((chat) => chat.id === activeChatId) ?? recentChats[0];
+  const allChats = [...pinnedChats, ...recentChatItems];
+  const activeChat = allChats.find((chat) => chat.id === activeChatId) ?? recentChatItems[0];
   const isNewChat = activeNav === "new";
   const isSearchChats = activeNav === "search";
   const canSend = draft.trim().length > 0;
+  const activeMessages = activeNav === "chat" ? (chatMessagesById[activeChatId] ?? []) : [];
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const searchResults = normalizedSearchQuery
     ? allChats.filter((chat) => chat.title.toLowerCase().includes(normalizedSearchQuery))
     : allChats;
   const profileLabel = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "User";
   const activeKnowledgeContext = chatKnowledgeContexts[activeChatId];
-  const activeMessages: Message[] = activeKnowledgeContext
-    ? [
-        { id: "mock-query", role: "user", text: llmSearchResponse.query },
-        { id: "mock-answer", role: "assistant", text: llmSearchResponse.answer_md },
-      ]
-    : messages;
   const welcomeTitle = useMemo(() => {
     if (isSearchChats) {
       return "Поиск чатов";
@@ -1540,7 +1632,7 @@ export default function App() {
               </h2>
             ) : null}
             <div className="chat-list" role="list">
-              {recentChats.map((chat) => {
+              {recentChatItems.map((chat) => {
                 const isActive = activeChatId === chat.id;
 
                 return (
@@ -1678,7 +1770,7 @@ export default function App() {
                     ))}
                   </div>
                 </section>
-              ) : (
+              ) : activeMessages.length > 0 ? (
                 activeMessages.map((message) => (
                   <article
                     key={message.id}
@@ -1700,10 +1792,24 @@ export default function App() {
                     </div>
                   </article>
                 ))
+              ) : (
+                <section className="selected-chat-start" aria-label="Выбранный чат">
+                  <div className="selected-chat-mark">
+                    <Icon name="chat" />
+                  </div>
+                  <h2>{activeChat.title}</h2>
+                  <p>Продолжите диалог или задайте уточнение по этой теме.</p>
+                </section>
               )}
             </div>
 
-            <form className="composer" onSubmit={(event) => event.preventDefault()}>
+            <form
+              className="composer"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleSubmitMessage();
+              }}
+            >
               <textarea
                 aria-label="Message input"
                 className="composer-input"
@@ -1711,6 +1817,7 @@ export default function App() {
                 rows={1}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={handleComposerKeyDown}
               />
               <button aria-label="Отправить сообщение" className="composer-submit" disabled={!canSend} type="submit">
                 <Icon name="send" />
