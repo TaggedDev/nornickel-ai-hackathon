@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ScientificTangle.Application.Chats;
 using ScientificTangle.Contracts.Chats;
+using ScientificTangle.Contracts.DTO;
+using ScientificTangle.Core.KnowledgeGraph;
 
 namespace ScientificTangle.Web.Controllers;
 
@@ -98,8 +100,27 @@ public sealed class ChatsController : ControllerBase
 
     private static ChatDetailsResponse Map(ChatDetails chat)
         => new(chat.Id, chat.Title, chat.IsPinned, chat.IsOwnedByCurrentUser, chat.LastActivityAtUtc,
-            chat.CreatedAtUtc, chat.Messages.Select(Map).ToList(), chat.NextMessagesBeforeUtc);
+            chat.CreatedAtUtc, chat.Messages.Select(Map).ToList(), chat.NextMessagesBeforeUtc,
+            chat.KnowledgeContext is null ? null : Map(chat.KnowledgeContext));
 
     private static ChatMessageResponse Map(ChatMessageItem message)
         => new(message.Id, message.Sender.ToString(), message.Text, message.CreatedAtUtc);
+
+    private static ChatKnowledgeContextDto Map(ChatKnowledgeContext context)
+        => new(
+            new KnowledgeGraphDto(
+                context.Graph.Nodes.Select(Map).ToList(),
+                context.Graph.Edges.Select(Map).ToList()),
+            context.Documents.Select(Map).ToList(),
+            context.RepresentedNodeIds);
+
+    private static KnowledgeGraphNodeDto Map(KnowledgeGraphNode node)
+        => new(node.Id, node.Type, node.Label, node.CanonicalName, node.Aliases, node.Properties);
+
+    private static KnowledgeGraphEdgeDto Map(KnowledgeGraphEdge edge)
+        => new(edge.Id, edge.Type, edge.Source, edge.Target, edge.Properties);
+
+    private static ReferencedDocumentDto Map(ReferencedDocument document)
+        => new(document.Id, document.Title, document.Snippet, document.Section, document.Page, document.Confidence,
+            document.Geo, document.Year, document.Language, "#");
 }

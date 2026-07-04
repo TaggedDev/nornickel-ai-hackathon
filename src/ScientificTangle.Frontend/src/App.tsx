@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type FormEvent, type PointerEvent, type WheelEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
   type AuthUser,
@@ -25,6 +25,43 @@ type Message = {
   id: string;
   role: "assistant" | "user";
   text: string;
+};
+
+type KnowledgeGraphNode = {
+  id: string;
+  type: "Material" | "Process" | "Equipment" | "Property" | "Experiment" | "Publication" | "Expert" | "Facility";
+  label: string;
+  canonicalName: string;
+  aliases: string[];
+  x: number;
+  y: number;
+};
+
+type KnowledgeGraphEdge = {
+  id: string;
+  type: string;
+  source: string;
+  target: string;
+};
+
+type ReferencedDocument = {
+  id: string;
+  title: string;
+  snippet: string;
+  section: string;
+  page: number;
+  confidence: number;
+  year: number;
+  downloadUrl: string;
+};
+
+type ChatKnowledgeContext = {
+  graph: {
+    nodes: KnowledgeGraphNode[];
+    edges: KnowledgeGraphEdge[];
+  };
+  documents: ReferencedDocument[];
+  representedNodeIds: string[];
 };
 
 type AppRoute = "/" | "/auth" | "/access-denied";
@@ -105,6 +142,98 @@ const messages: Message[] = [
     text: "Левая панель видна на десктопе, сворачивается до панели иконок и становится выдвижным меню на мобильных устройствах.",
   },
 ];
+
+const mockKnowledgeContext: ChatKnowledgeContext = {
+  graph: {
+    nodes: [
+      {
+        id: "n1",
+        type: "Process",
+        label: "Nickel electrowinning",
+        canonicalName: "Nickel electrowinning",
+        aliases: ["Ni EW", "electrowinning"],
+        x: 420,
+        y: 235,
+      },
+      {
+        id: "n2",
+        type: "Material",
+        label: "Catholyte",
+        canonicalName: "Catholyte",
+        aliases: ["catholyte"],
+        x: 205,
+        y: 170,
+      },
+      {
+        id: "n3",
+        type: "Equipment",
+        label: "EW cell",
+        canonicalName: "Electrowinning cell",
+        aliases: ["electrolytic cell"],
+        x: 210,
+        y: 355,
+      },
+      {
+        id: "n4",
+        type: "Property",
+        label: "Flow rate",
+        canonicalName: "Catholyte circulation flow rate",
+        aliases: ["8-10 m3/h", "12-15 m3/h"],
+        x: 650,
+        y: 170,
+      },
+      {
+        id: "n5",
+        type: "Property",
+        label: "Temperature",
+        canonicalName: "Catholyte temperature",
+        aliases: ["60-65 C"],
+        x: 650,
+        y: 355,
+      },
+    ],
+    edges: [
+      { id: "e1", type: "uses_material", source: "n1", target: "n2" },
+      { id: "e2", type: "operates_at_condition", source: "n1", target: "n4" },
+      { id: "e3", type: "operates_at_condition", source: "n1", target: "n4" },
+      { id: "e4", type: "operates_at_condition", source: "n1", target: "n5" },
+      { id: "e5", type: "produces_output", source: "n3", target: "n2" },
+    ],
+  },
+  documents: [
+    {
+      id: "doc_9f2a11c7be03",
+      title: "Nickel electrowinning. Electrolyte composition influence",
+      snippet: "Catholyte supply through a lower distribution collector gives even concentration near the cathode.",
+      section: "3.2 Electrolyte circulation",
+      page: 12,
+      confidence: 0.86,
+      year: 2019,
+      downloadUrl: "#",
+    },
+    {
+      id: "doc_4d8e60a1f592",
+      title: "OIP-05-2019 Cu EW parameters",
+      snippet: "Side recirculation through overflow pockets stabilizes the 60-65 C operating temperature.",
+      section: "2.4 Cell thermal mode",
+      page: 8,
+      confidence: 0.79,
+      year: 2019,
+      downloadUrl: "#",
+    },
+    {
+      id: "doc_1c7b93df20aa",
+      title: "Review. Global practice of electric refining",
+      snippet: "High-current-density lines recommend circulation up to 12-15 m3/h per cell.",
+      section: "4.1 Cell hydrodynamics",
+      page: 21,
+      confidence: 0.74,
+      year: 2021,
+      downloadUrl: "#",
+    },
+  ],
+  representedNodeIds: ["n1", "n2", "n3", "n4", "n5"],
+};
 
 const promptSuggestions = [
   "Суммировать риски производства никеля",
@@ -375,6 +504,21 @@ function Icon({ name }: { name: IconName }) {
           <path d="M10 17l5-5-5-5M15 12H4M20 4v16" />
         </svg>
       ) : null}
+      {name === "expand" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M8 4H4v4M4 4l6 6M16 4h4v4M20 4l-6 6M8 20H4v-4M4 20l6-6M16 20h4v-4M20 20l-6-6" />
+        </svg>
+      ) : null}
+      {name === "plus" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      ) : null}
+      {name === "minus" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M5 12h14" />
+        </svg>
+      ) : null}
     </span>
   );
 }
@@ -395,7 +539,223 @@ type IconName =
   | "chevron"
   | "close"
   | "send"
-  | "logout";
+  | "logout"
+  | "expand"
+  | "plus"
+  | "minus";
+
+const nodeTypeColors: Record<KnowledgeGraphNode["type"], string> = {
+  Material: "#2dd4bf",
+  Process: "#60a5fa",
+  Equipment: "#f59e0b",
+  Property: "#a78bfa",
+  Experiment: "#fb7185",
+  Publication: "#34d399",
+  Expert: "#f472b6",
+  Facility: "#facc15",
+};
+
+function getNodeColor(type: KnowledgeGraphNode["type"]) {
+  return nodeTypeColors[type] ?? "#d1d5db";
+}
+
+function KnowledgeGraphCanvas({
+  graph,
+  fullscreen = false,
+}: {
+  graph: ChatKnowledgeContext["graph"];
+  fullscreen?: boolean;
+}) {
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragStart, setDragStart] = useState<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const nodeById = useMemo(() => new Map(graph.nodes.map((node) => [node.id, node])), [graph.nodes]);
+  const activeNode = graph.nodes.find((node) => node.id === (hoveredNodeId ?? selectedNodeId));
+  const canPan = fullscreen;
+
+  function handleWheel(event: WheelEvent<SVGSVGElement>) {
+    if (!fullscreen) {
+      return;
+    }
+
+    event.preventDefault();
+    setScale((value) => Math.min(2.4, Math.max(0.65, value + (event.deltaY < 0 ? 0.12 : -0.12))));
+  }
+
+  function handlePointerDown(event: PointerEvent<SVGSVGElement>) {
+    if (!canPan || !(event.target instanceof Element) || !event.target.classList.contains("graph-background")) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragStart({ pointerId: event.pointerId, x: event.clientX, y: event.clientY, offsetX: offset.x, offsetY: offset.y });
+  }
+
+  function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (!dragStart || dragStart.pointerId !== event.pointerId) {
+      return;
+    }
+
+    setOffset({
+      x: dragStart.offsetX + (event.clientX - dragStart.x) / scale,
+      y: dragStart.offsetY + (event.clientY - dragStart.y) / scale,
+    });
+  }
+
+  function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
+    if (dragStart?.pointerId === event.pointerId) {
+      setDragStart(null);
+    }
+  }
+
+  function zoomBy(delta: number) {
+    setScale((value) => Math.min(2.4, Math.max(0.65, value + delta)));
+  }
+
+  return (
+    <div className={`knowledge-graph ${fullscreen ? "knowledge-graph-full" : "knowledge-graph-preview"}`}>
+      {fullscreen ? (
+        <div className="graph-toolbar" aria-label="Graph controls">
+          <button aria-label="Zoom in" className="graph-icon-button" type="button" onClick={() => zoomBy(0.15)}>
+            <Icon name="plus" />
+          </button>
+          <button aria-label="Zoom out" className="graph-icon-button" type="button" onClick={() => zoomBy(-0.15)}>
+            <Icon name="minus" />
+          </button>
+        </div>
+      ) : null}
+      <svg
+        aria-label="Knowledge graph"
+        className={canPan ? "graph-canvas graph-canvas-pannable" : "graph-canvas"}
+        role="img"
+        viewBox="0 0 840 472.5"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onWheel={handleWheel}
+      >
+        <rect className="graph-background" height="472.5" width="840" x="0" y="0" />
+        <g transform={`translate(${offset.x} ${offset.y}) scale(${scale})`}>
+          {graph.edges.map((edge) => {
+            const source = nodeById.get(edge.source);
+            const target = nodeById.get(edge.target);
+            if (!source || !target) {
+              return null;
+            }
+
+            const isActive = hoveredNodeId === source.id || hoveredNodeId === target.id || selectedNodeId === source.id || selectedNodeId === target.id;
+
+            return (
+              <g key={edge.id} className={`graph-edge ${isActive ? "is-active" : ""}`}>
+                <line x1={source.x} x2={target.x} y1={source.y} y2={target.y} />
+                <text x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 6}>
+                  {edge.type.replace(/_/g, " ")}
+                </text>
+              </g>
+            );
+          })}
+
+          {graph.nodes.map((node) => {
+            const color = getNodeColor(node.type);
+            const isActive = hoveredNodeId === node.id || selectedNodeId === node.id;
+
+            return (
+              <g
+                key={node.id}
+                className={`graph-node ${isActive ? "is-active" : ""}`}
+                style={{ "--node-color": color } as CSSProperties}
+                tabIndex={0}
+                transform={`translate(${node.x} ${node.y})`}
+                onBlur={() => setHoveredNodeId(null)}
+                onClick={() => setSelectedNodeId(node.id)}
+                onFocus={() => setHoveredNodeId(node.id)}
+                onMouseEnter={() => setHoveredNodeId(node.id)}
+                onMouseLeave={() => setHoveredNodeId(null)}
+              >
+                <circle r={fullscreen ? 31 : 27} />
+                <text dy="4">{node.label}</text>
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+
+      {activeNode ? (
+        <div className="graph-tooltip" style={{ borderColor: getNodeColor(activeNode.type) }}>
+          <strong>{activeNode.label}</strong>
+          <span>{activeNode.type}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ContextPanelContent({
+  context,
+  onOpenGraph,
+}: {
+  context: ChatKnowledgeContext;
+  onOpenGraph: () => void;
+}) {
+  return (
+    <>
+      <section className="graph-preview-section" aria-label="Knowledge graph preview">
+        <div className="graph-preview-header">
+          <h3>Knowledge graph</h3>
+          <button aria-label="Open full screen" className="graph-icon-button" title="Open full screen" type="button" onClick={onOpenGraph}>
+            <Icon name="expand" />
+          </button>
+        </div>
+        <KnowledgeGraphCanvas graph={context.graph} />
+      </section>
+
+      <section className="document-section" aria-label="Referenced documents">
+        <div className="document-section-header">
+          <h3>Referenced documents</h3>
+          <span>{context.documents.length}</span>
+        </div>
+        <div className="document-list">
+          {context.documents.map((document) => (
+            <a key={document.id} className="document-item" href={document.downloadUrl}>
+              <span className="document-title">{document.title}</span>
+              <span className="document-meta">
+                {document.section} · p. {document.page} · {Math.round(document.confidence * 100)}%
+              </span>
+              <span className="document-snippet">{document.snippet}</span>
+            </a>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function KnowledgeGraphModal({
+  context,
+  onClose,
+}: {
+  context: ChatKnowledgeContext;
+  onClose: () => void;
+}) {
+  return (
+    <div className="graph-modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="graph-modal" aria-label="Knowledge graph full screen" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <div className="graph-modal-header">
+          <div>
+            <h2>Knowledge graph</h2>
+            <p>{context.representedNodeIds.length} represented nodes</p>
+          </div>
+          <button aria-label="Close graph" className="context-close" type="button" onClick={onClose}>
+            <Icon name="close" />
+          </button>
+        </div>
+        <KnowledgeGraphCanvas fullscreen graph={context.graph} />
+      </section>
+    </div>
+  );
+}
 
 function AuthScreen({
   authMode,
@@ -733,6 +1093,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [graphFullscreenOpen, setGraphFullscreenOpen] = useState(false);
 
   useEffect(() => {
     function handleRouteChange() {
@@ -853,6 +1214,7 @@ export default function App() {
     ? allChats.filter((chat) => chat.title.toLowerCase().includes(normalizedSearchQuery))
     : allChats;
   const profileLabel = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "User";
+  const activeKnowledgeContext = mockKnowledgeContext;
   const welcomeTitle = useMemo(() => {
     if (isSearchChats) {
       return "Поиск чатов";
@@ -1160,16 +1522,16 @@ export default function App() {
               </div>
 
               <div className="context-panel-body">
-
-                <section className="context-card">
-                  <h3>Граф знаний</h3>
-                  <p>Место для сущностей, связанных узлов и виджетов исследования графа.</p>
-                </section>
+                <ContextPanelContent context={activeKnowledgeContext} onOpenGraph={() => setGraphFullscreenOpen(true)} />
               </div>
             </aside>
           ) : null}
         </section>
       </main>
+
+      {graphFullscreenOpen ? (
+        <KnowledgeGraphModal context={activeKnowledgeContext} onClose={() => setGraphFullscreenOpen(false)} />
+      ) : null}
     </div>
   );
 }

@@ -24,6 +24,7 @@ public sealed class EfChatService : IChatService
 
         await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
         chat.AddMessage(ChatMessageSender.Assistant, "Mocked AI Answer", DateTime.UtcNow);
+        chat.SetRepresentedKnowledgeGraphNodeIds(MockKnowledgeContext.Create().RepresentedNodeIds);
 
         _dbContext.Chats.Add(chat);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -81,6 +82,7 @@ public sealed class EfChatService : IChatService
 
         await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
         chat.AddMessage(ChatMessageSender.Assistant, "Mocked AI Answer", DateTime.UtcNow);
+        chat.SetRepresentedKnowledgeGraphNodeIds(MockKnowledgeContext.Create().RepresentedNodeIds);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         return await BuildDetailsAsync(chat.Id, userId, null, MaxTake, cancellationToken);
@@ -138,6 +140,7 @@ public sealed class EfChatService : IChatService
                 candidate.OwnerUserId,
                 candidate.CreatedAtUtc,
                 candidate.LastActivityAtUtc,
+                candidate.RepresentedKnowledgeGraphNodeIdsJson,
                 IsPinned = candidate.Pins.Any(pin => pin.UserId == userId)
             })
             .FirstOrDefaultAsync(cancellationToken);
@@ -160,8 +163,9 @@ public sealed class EfChatService : IChatService
         var page = messages.Take(messagesTake).Reverse().ToList();
         var nextBeforeUtc = hasMore ? page.FirstOrDefault()?.CreatedAtUtc : null;
 
+        var knowledgeContext = MockKnowledgeContext.Create();
         return new ChatDetails(chat.Id, chat.Title, chat.IsPinned, chat.OwnerUserId == userId, chat.LastActivityAtUtc,
-            chat.CreatedAtUtc, page, nextBeforeUtc);
+            chat.CreatedAtUtc, page, nextBeforeUtc, knowledgeContext);
     }
 
     private static int NormalizeTake(int take) => Math.Clamp(take <= 0 ? 30 : take, 1, MaxTake);
