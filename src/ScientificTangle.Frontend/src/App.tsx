@@ -1538,6 +1538,9 @@ export default function App() {
 
   function handleSelectNav(itemId: string) {
     setActiveNav(itemId);
+    if (itemId === "new") {
+      setContextOpen(false);
+    }
     if (isMobile) {
       setMobileSidebarOpen(false);
     }
@@ -1827,7 +1830,7 @@ export default function App() {
             ) : null}
             <div className="chat-list" role="list">
               {pinnedChatItems.map((chat) => {
-                const isActive = activeChatId === chat.id;
+                const isActive = activeNav === "chat" && activeChatId === chat.id;
 
                 return (
                   <button
@@ -1855,7 +1858,7 @@ export default function App() {
             ) : null}
             <div className="chat-list" role="list">
               {recentChatItems.map((chat) => {
-                const isActive = activeChatId === chat.id;
+                const isActive = activeNav === "chat" && activeChatId === chat.id;
 
                 return (
                   <button
@@ -1928,7 +1931,7 @@ export default function App() {
             </div>
           </div>
 
-          {!contextOpen ? (
+          {!contextOpen && !isNewChat ? (
             <button
               className="context-button"
               type="button"
@@ -1984,6 +1987,20 @@ export default function App() {
                     <Icon name="spark" />
                   </div>
                   <h2>Чем могу помочь?</h2>
+                  <div className="prompt-grid">
+                    <button className="prompt-card" type="button" onClick={() => void submitMessage("Какие методы обессоливания воды подходят для обогатительной фабрики, если исходная вода содержит сульфаты, хлориды, Ca, Mg, Na по 200–300 мг/л, а требуемый сухой остаток — ≤1000 мг/дм³?")}>
+                      Обессоливание воды для обогатительной фабрики
+                    </button>
+                    <button className="prompt-card" type="button" onClick={() => void submitMessage("Какие технические решения организации циркуляции католита при электроэкстракции никеля описаны в мировой практике, и какая скорость потока считается оптимальной?")}>
+                      Циркуляция католита при электроэкстракции никеля
+                    </button>
+                    <button className="prompt-card" type="button" onClick={() => void submitMessage("Покажите все эксперименты и публикации по распределению Au, Ag и МПГ между медным/никелевым штейном и шлаком за последние 5 лет.")}>
+                      Распределение Au, Ag и МПГ между штейном и шлаком
+                    </button>
+                    <button className="prompt-card" type="button" onClick={() => void submitMessage("Какие способы закачки шахтных вод в глубокие горизонты применялись в России и за рубежом, и каковы их технико-экономические показатели?")}>
+                      Закачка шахтных вод в глубокие горизонты
+                    </button>
+                  </div>
                 </section>
               ) : activeMessages.length > 0 ? (
                 activeMessages.map((message) => (
@@ -2023,26 +2040,28 @@ export default function App() {
               {chatRequestError ? <p className="inline-status">{chatRequestError}</p> : null}
             </div>
 
-            <form
-              className="composer"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleSubmitMessage();
-              }}
-            >
-              <textarea
-                aria-label="Message input"
-                className="composer-input"
-                placeholder="Введите сообщение"
-                rows={1}
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={handleComposerKeyDown}
-              />
-              <button aria-label="Отправить сообщение" className="composer-submit" disabled={!canSend} type="submit">
-                <Icon name="send" />
-              </button>
-            </form>
+            {!isSearchChats ? (
+              <form
+                className="composer"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleSubmitMessage();
+                }}
+              >
+                <textarea
+                  aria-label="Message input"
+                  className="composer-input"
+                  placeholder="Введите сообщение"
+                  rows={1}
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={handleComposerKeyDown}
+                />
+                <button aria-label="Отправить сообщение" className="composer-submit" disabled={!canSend} type="submit">
+                  <Icon name="send" />
+                </button>
+              </form>
+            ) : null}
           </div>
         </section>
 
