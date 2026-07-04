@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace ScientificTangle.Core.Chats;
 
 public sealed class Chat
@@ -30,6 +32,23 @@ public sealed class Chat
 
     public DateTime LastActivityAtUtc { get; private set; }
 
+    public string RepresentedKnowledgeGraphNodeIdsJson { get; private set; } = "[]";
+
+    public IReadOnlyCollection<string> RepresentedKnowledgeGraphNodeIds
+    {
+        get
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<List<string>>(RepresentedKnowledgeGraphNodeIdsJson) ?? [];
+            }
+            catch (JsonException)
+            {
+                return [];
+            }
+        }
+    }
+
     public IReadOnlyCollection<ChatMessage> Messages => _messages;
 
     public IReadOnlyCollection<ChatPin> Pins => _pins;
@@ -45,6 +64,16 @@ public sealed class Chat
         LastActivityAtUtc = createdAtUtc;
 
         return message;
+    }
+
+    public void SetRepresentedKnowledgeGraphNodeIds(IEnumerable<string> nodeIds)
+    {
+        var distinctNodeIds = nodeIds
+            .Where(nodeId => !string.IsNullOrWhiteSpace(nodeId))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        RepresentedKnowledgeGraphNodeIdsJson = JsonSerializer.Serialize(distinctNodeIds);
     }
 
     public static string BuildTitle(string firstMessageText)

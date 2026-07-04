@@ -148,6 +148,10 @@ namespace ScientificTangle.Infrastructure.Persistence.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("character varying(450)");
 
+                    b.Property<string>("RepresentedKnowledgeGraphNodeIdsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(60)

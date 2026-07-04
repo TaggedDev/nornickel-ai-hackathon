@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type WheelEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
   type AuthUser,
@@ -8,6 +8,7 @@ import {
   register,
   type ValidationErrors,
 } from "./shared/api/auth";
+import searchCatholyteMock from "../../../mock-data/search-catholyte.mock.json";
 
 type NavItem = {
   id: string;
@@ -25,6 +26,81 @@ type Message = {
   id: string;
   role: "assistant" | "user";
   text: string;
+};
+
+type KnowledgeGraphNode = {
+  id: string;
+  type: "Material" | "Process" | "Equipment" | "Property" | "Experiment" | "Publication" | "Expert" | "Facility";
+  label: string;
+  canonicalName: string;
+  aliases: string[];
+  properties: Record<string, unknown>;
+  x: number;
+  y: number;
+};
+
+type KnowledgeGraphEdge = {
+  id: string;
+  type: string;
+  source: string;
+  target: string;
+  label: string;
+  properties: Record<string, unknown>;
+};
+
+type ReferencedDocument = {
+  id: string;
+  title: string;
+  snippet: string;
+  section: string;
+  page: number;
+  confidence: number;
+  year: number;
+  language: string;
+  downloadUrl: string;
+};
+
+type ChatKnowledgeContext = {
+  graph: {
+    nodes: KnowledgeGraphNode[];
+    edges: KnowledgeGraphEdge[];
+  };
+  documents: ReferencedDocument[];
+  representedNodeIds: string[];
+};
+
+type MockSearchResponse = {
+  query: string;
+  answer_md: string;
+  citations: Array<{
+    id: number;
+    doc_id: string;
+    title: string;
+    snippet: string;
+    section: string;
+    page: number;
+    confidence: number;
+    year: number;
+    lang: string;
+  }>;
+  subgraph: {
+    nodes: Array<{
+      id: string;
+      type: KnowledgeGraphNode["type"];
+      label: string;
+      canonical_name: string;
+      aliases: string[];
+      props: Record<string, unknown>;
+    }>;
+    edges: Array<{
+      id: string;
+      type: string;
+      source: string;
+      target: string;
+      props: Record<string, unknown>;
+    }>;
+  };
+  meta: Record<string, unknown>;
 };
 
 type AppRoute = "/" | "/auth" | "/access-denied";
@@ -146,6 +222,72 @@ const initialChatMessagesById: Record<string, Message[]> = {
     },
   ],
 };
+
+const llmSearchResponse = searchCatholyteMock as MockSearchResponse;
+
+const edgeTypeLabels: Record<string, string> = {
+  uses_material: "использует материал",
+  operates_at_condition: "условие работы",
+  produces_output: "производит результат",
+  described_in: "описано в",
+  validated_by: "подтверждено",
+  contradicts: "противоречит",
+};
+
+const graphNodeLayout: Record<string, { x: number; y: number }> = {
+  n1: { x: 420, y: 235 },
+  n2: { x: 205, y: 170 },
+  n3: { x: 210, y: 355 },
+  n4: { x: 650, y: 170 },
+  n5: { x: 650, y: 355 },
+};
+
+function buildKnowledgeContextFromLlmResponse(response: MockSearchResponse): ChatKnowledgeContext {
+  const nodes = response.subgraph.nodes.map((node, index) => {
+    const fallbackAngle = (Math.PI * 2 * index) / Math.max(response.subgraph.nodes.length, 1);
+    const layout = graphNodeLayout[node.id] ?? {
+      x: 420 + Math.cos(fallbackAngle) * 230,
+      y: 235 + Math.sin(fallbackAngle) * 135,
+    };
+
+    return {
+      id: node.id,
+      type: node.type,
+      label: node.label,
+      canonicalName: node.canonical_name,
+      aliases: node.aliases,
+      properties: node.props,
+      x: layout.x,
+      y: layout.y,
+    };
+  });
+
+  return {
+    graph: {
+      nodes,
+      edges: response.subgraph.edges.map((edge) => ({
+        id: edge.id,
+        type: edge.type,
+        source: edge.source,
+        target: edge.target,
+        label: edgeTypeLabels[edge.type] ?? edge.type,
+        properties: edge.props,
+      })),
+    },
+    documents: response.citations.map((citation) => ({
+      id: citation.doc_id,
+      title: citation.title,
+      snippet: citation.snippet,
+      section: citation.section,
+      page: citation.page,
+      confidence: citation.confidence,
+      year: citation.year,
+      language: citation.lang,
+      downloadUrl: "#",
+    })),
+    representedNodeIds: nodes.map((node) => node.id),
+  };
+}
 
 const promptSuggestions = [
   "Суммировать риски производства никеля",
@@ -416,6 +558,21 @@ function Icon({ name }: { name: IconName }) {
           <path d="M10 17l5-5-5-5M15 12H4M20 4v16" />
         </svg>
       ) : null}
+      {name === "expand" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M8 4H4v4M4 4l6 6M16 4h4v4M20 4l-6 6M8 20H4v-4M4 20l6-6M16 20h4v-4M20 20l-6-6" />
+        </svg>
+      ) : null}
+      {name === "plus" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      ) : null}
+      {name === "minus" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M5 12h14" />
+        </svg>
+      ) : null}
     </span>
   );
 }
@@ -436,7 +593,236 @@ type IconName =
   | "chevron"
   | "close"
   | "send"
-  | "logout";
+  | "logout"
+  | "expand"
+  | "plus"
+  | "minus";
+
+const nodeTypeColors: Record<KnowledgeGraphNode["type"], string> = {
+  Material: "#2dd4bf",
+  Process: "#60a5fa",
+  Equipment: "#f59e0b",
+  Property: "#a78bfa",
+  Experiment: "#fb7185",
+  Publication: "#34d399",
+  Expert: "#f472b6",
+  Facility: "#facc15",
+};
+
+function getNodeColor(type: KnowledgeGraphNode["type"]) {
+  return nodeTypeColors[type] ?? "#d1d5db";
+}
+
+function KnowledgeGraphCanvas({
+  graph,
+  fullscreen = false,
+}: {
+  graph: ChatKnowledgeContext["graph"];
+  fullscreen?: boolean;
+}) {
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragStart, setDragStart] = useState<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const nodeById = useMemo(() => new Map(graph.nodes.map((node) => [node.id, node])), [graph.nodes]);
+  const activeNode = graph.nodes.find((node) => node.id === (hoveredNodeId ?? selectedNodeId));
+  const canPan = fullscreen;
+
+  function handleWheel(event: WheelEvent<SVGSVGElement>) {
+    if (!fullscreen) {
+      return;
+    }
+
+    event.preventDefault();
+    setScale((value) => Math.min(2.4, Math.max(0.65, value + (event.deltaY < 0 ? 0.12 : -0.12))));
+  }
+
+  function handlePointerDown(event: PointerEvent<SVGSVGElement>) {
+    if (!canPan || !(event.target instanceof Element) || !event.target.classList.contains("graph-background")) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragStart({ pointerId: event.pointerId, x: event.clientX, y: event.clientY, offsetX: offset.x, offsetY: offset.y });
+  }
+
+  function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (!dragStart || dragStart.pointerId !== event.pointerId) {
+      return;
+    }
+
+    setOffset({
+      x: dragStart.offsetX + (event.clientX - dragStart.x) / scale,
+      y: dragStart.offsetY + (event.clientY - dragStart.y) / scale,
+    });
+  }
+
+  function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
+    if (dragStart?.pointerId === event.pointerId) {
+      setDragStart(null);
+    }
+  }
+
+  function zoomBy(delta: number) {
+    setScale((value) => Math.min(2.4, Math.max(0.65, value + delta)));
+  }
+
+  return (
+    <div className={`knowledge-graph ${fullscreen ? "knowledge-graph-full" : "knowledge-graph-preview"}`}>
+      {fullscreen ? (
+        <div className="graph-toolbar" aria-label="Graph controls">
+          <button aria-label="Zoom in" className="graph-icon-button" type="button" onClick={() => zoomBy(0.15)}>
+            <Icon name="plus" />
+          </button>
+          <button aria-label="Zoom out" className="graph-icon-button" type="button" onClick={() => zoomBy(-0.15)}>
+            <Icon name="minus" />
+          </button>
+        </div>
+      ) : null}
+      <svg
+        aria-label="Knowledge graph"
+        className={canPan ? "graph-canvas graph-canvas-pannable" : "graph-canvas"}
+        role="img"
+        viewBox="0 0 840 472.5"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onWheel={handleWheel}
+      >
+        <rect className="graph-background" height="472.5" width="840" x="0" y="0" />
+        <g transform={`translate(${offset.x} ${offset.y}) scale(${scale})`}>
+          {graph.edges.map((edge) => {
+            const source = nodeById.get(edge.source);
+            const target = nodeById.get(edge.target);
+            if (!source || !target) {
+              return null;
+            }
+
+            const isActive = hoveredNodeId === source.id || hoveredNodeId === target.id || selectedNodeId === source.id || selectedNodeId === target.id;
+
+            return (
+              <g key={edge.id} className={`graph-edge ${isActive ? "is-active" : ""}`}>
+                <line x1={source.x} x2={target.x} y1={source.y} y2={target.y} />
+                <text x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 6}>
+                  {edge.label}
+                </text>
+              </g>
+            );
+          })}
+
+          {graph.nodes.map((node) => {
+            const color = getNodeColor(node.type);
+            const isActive = hoveredNodeId === node.id || selectedNodeId === node.id;
+
+            return (
+              <g
+                key={node.id}
+                className={`graph-node ${isActive ? "is-active" : ""}`}
+                style={{ "--node-color": color } as CSSProperties}
+                tabIndex={0}
+                transform={`translate(${node.x} ${node.y})`}
+                onBlur={() => setHoveredNodeId(null)}
+                onClick={() => setSelectedNodeId(node.id)}
+                onFocus={() => setHoveredNodeId(node.id)}
+                onMouseEnter={() => setHoveredNodeId(node.id)}
+                onMouseLeave={() => setHoveredNodeId(null)}
+              >
+                <circle r={fullscreen ? 31 : 27} />
+                <text dy="4">{node.label}</text>
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+
+      {activeNode ? (
+        <div className="graph-tooltip" style={{ borderColor: getNodeColor(activeNode.type) }}>
+          <strong>{activeNode.label}</strong>
+          <span>{activeNode.canonicalName}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ContextPanelContent({
+  context,
+  onOpenGraph,
+  hoveredDocId,
+  onDocumentHover,
+  onDocumentLeave,
+}: {
+  context: ChatKnowledgeContext;
+  onOpenGraph: () => void;
+  hoveredDocId: string | null;
+  onDocumentHover: (docId: string) => void;
+  onDocumentLeave: () => void;
+}) {
+  return (
+    <>
+      <section className="graph-preview-section" aria-label="Превью графа знаний">
+        <div className="graph-preview-header">
+          <h3>Граф знаний</h3>
+          <button aria-label="Открыть на весь экран" className="graph-icon-button" title="Открыть на весь экран" type="button" onClick={onOpenGraph}>
+            <Icon name="expand" />
+          </button>
+        </div>
+        <KnowledgeGraphCanvas graph={context.graph} />
+      </section>
+
+      <section className="document-section" aria-label="Документы-источники">
+        <div className="document-section-header">
+          <h3>Документы-источники</h3>
+          <span>{context.documents.length}</span>
+        </div>
+        <div className="document-list">
+          {context.documents.map((document) => (
+            <button
+              key={document.id}
+              id={`source-${document.id}`}
+              className={`document-item ${hoveredDocId === document.id ? "source-hovered" : ""}`}
+              type="button"
+              onMouseEnter={() => onDocumentHover(document.id)}
+              onMouseLeave={onDocumentLeave}
+            >
+              <span className="document-title">{document.title}</span>
+              <span className="document-meta">
+                {document.section} · стр. {document.page} · {Math.round(document.confidence * 100)}% · {document.year}
+              </span>
+              <span className="document-snippet">{document.snippet}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function KnowledgeGraphModal({
+  context,
+  onClose,
+}: {
+  context: ChatKnowledgeContext;
+  onClose: () => void;
+}) {
+  return (
+    <div className="graph-modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="graph-modal" aria-label="Граф знаний на весь экран" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <div className="graph-modal-header">
+          <div>
+            <h2>Граф знаний</h2>
+            <p>{context.representedNodeIds.length} узлов из metadata ответа LLM</p>
+          </div>
+          <button aria-label="Закрыть граф" className="context-close" type="button" onClick={onClose}>
+            <Icon name="close" />
+          </button>
+        </div>
+        <KnowledgeGraphCanvas fullscreen graph={context.graph} />
+      </section>
+    </div>
+  );
+}
 
 function AuthScreen({
   authMode,
@@ -758,6 +1144,133 @@ function AccessDeniedScreen() {
   );
 }
 
+function MarkdownRenderer({
+  text,
+  getCitationDocId,
+  onCitationClick,
+  onCitationHover,
+  onCitationLeave,
+  hoveredCitationNum,
+}: {
+  text: string;
+  getCitationDocId: (num: number) => string;
+  onCitationClick: (docId: string) => void;
+  onCitationHover: (docId: string, citationNum: number) => void;
+  onCitationLeave: () => void;
+  hoveredCitationNum: number | null;
+}) {
+  if (!text) return null;
+
+  function renderBold(text: string) {
+    const parts: ReactNode[] = [];
+    const boldRegex = /\*\*(.+?)\*\*/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let key = 0;
+
+    while ((match = boldRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      parts.push(<strong key={key++}>{match[1]}</strong>);
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+  }
+
+  function renderInline(segment: string) {
+    const parts: ReactNode[] = [];
+    const citationRegex = /\[(\d+)\]/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let key = 0;
+
+    while ((match = citationRegex.exec(segment)) !== null) {
+      const num = parseInt(match[1], 10);
+      const docId = getCitationDocId(num);
+      const isHovered = num === hoveredCitationNum;
+
+      if (match.index > lastIndex) {
+        const textBefore = segment.slice(lastIndex, match.index);
+        if (textBefore.trim()) {
+          parts.push(
+            <a
+              key={key++}
+              href="#"
+              className={`citation-text-link ${isHovered ? "is-hovered" : ""}`}
+              onClick={(e) => {
+                e.preventDefault();
+                if (docId) onCitationClick(docId);
+              }}
+              onMouseEnter={() => onCitationHover(docId, num)}
+              onMouseLeave={onCitationLeave}
+            >
+              {renderBold(textBefore)}
+            </a>
+          );
+        }
+      }
+
+      parts.push(
+        <a
+          key={key++}
+          href="#"
+          className={`citation-link ${isHovered ? "is-hovered" : ""}`}
+          onClick={(e) => {
+            e.preventDefault();
+            if (docId) onCitationClick(docId);
+          }}
+          onMouseEnter={() => onCitationHover(docId, num)}
+          onMouseLeave={onCitationLeave}
+        >
+          [{num}]
+        </a>
+      );
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < segment.length) {
+      parts.push(renderBold(segment.slice(lastIndex)));
+    }
+
+    return parts.length > 0 ? parts : segment;
+  }
+
+  const paragraphs = text.split(/\n\n+/);
+
+  return (
+    <div className="markdown-content">
+      {paragraphs.map((para, i) => {
+        const trimmed = para.trim();
+        if (!trimmed) return null;
+
+        if (/^[-*]\s/.test(trimmed)) {
+          const items = trimmed.split(/\n/).filter((line) => /^[-*]\s/.test(line));
+          return (
+            <ul key={i} style={{ margin: "0.25rem 0", paddingLeft: "1.25rem" }}>
+              {items.map((item, j) => (
+                <li key={j}>{renderInline(item.replace(/^[-*]\s/, ""))}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        return (
+          <p key={i} style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+            {renderInline(trimmed)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function App() {
   const isMobile = useIsMobile();
   const [route, setRoute] = useState<AppRoute>(() => normalizePath(window.location.pathname));
@@ -776,6 +1289,10 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [graphFullscreenOpen, setGraphFullscreenOpen] = useState(false);
+  const [chatKnowledgeContexts, setChatKnowledgeContexts] = useState<Record<string, ChatKnowledgeContext>>({});
+  const [hoveredDocId, setHoveredDocId] = useState<string | null>(null);
+  const [hoveredCitationNum, setHoveredCitationNum] = useState<number | null>(null);
 
   useEffect(() => {
     function handleRouteChange() {
@@ -844,6 +1361,39 @@ export default function App() {
     }
   }
 
+  function handleCitationHover(docId: string, citationNum: number) {
+    setHoveredDocId(docId);
+    setHoveredCitationNum(citationNum);
+  }
+
+  function handleCitationLeave() {
+    setHoveredDocId(null);
+    setHoveredCitationNum(null);
+  }
+
+  function handleDocumentHover(docId: string) {
+    setHoveredDocId(docId);
+    const citationNums = llmSearchResponse.citations.filter((c) => c.doc_id === docId).map((c) => c.id);
+    if (citationNums.length > 0) {
+      setHoveredCitationNum(citationNums[0]);
+    }
+  }
+
+  function handleDocumentLeave() {
+    setHoveredDocId(null);
+    setHoveredCitationNum(null);
+  }
+
+  function handleCitationClick(docId: string) {
+    setContextOpen(true);
+    setTimeout(() => {
+      const el = document.getElementById(`source-${docId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
+  }
+
   function handleToggleSidebar() {
     if (isMobile) {
       setMobileSidebarOpen((value) => !value);
@@ -863,6 +1413,10 @@ export default function App() {
   function handleSelectChat(chatId: string) {
     setActiveNav("chat");
     setActiveChatId(chatId);
+    setChatKnowledgeContexts((value) => ({
+      ...value,
+      [chatId]: value[chatId] ?? buildKnowledgeContextFromLlmResponse(llmSearchResponse),
+    }));
     if (isMobile) {
       setMobileSidebarOpen(false);
     }
@@ -951,6 +1505,7 @@ export default function App() {
     ? allChats.filter((chat) => chat.title.toLowerCase().includes(normalizedSearchQuery))
     : allChats;
   const profileLabel = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "User";
+  const activeKnowledgeContext = chatKnowledgeContexts[activeChatId];
   const welcomeTitle = useMemo(() => {
     if (isSearchChats) {
       return "Поиск чатов";
@@ -1131,7 +1686,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="main-panel">
+      <main className={`main-panel ${contextOpen ? "main-panel-with-context" : ""}`}>
         <header className="main-header">
           <div className="main-header-left">
             {isMobile ? (
@@ -1151,17 +1706,18 @@ export default function App() {
             </div>
           </div>
 
-          <button
-            aria-expanded={contextOpen}
-            className={`context-button ${contextOpen ? "is-active" : ""}`}
-            type="button"
-            onClick={() => setContextOpen((value) => !value)}
-          >
-            Контекст
-          </button>
+          {!contextOpen ? (
+            <button
+              className="context-button"
+              type="button"
+              onClick={() => setContextOpen(true)}
+            >
+              Контекст
+            </button>
+          ) : null}
         </header>
 
-        <section className={`workspace ${contextOpen ? "workspace-with-context" : ""}`}>
+        <section className="workspace">
           <div className="conversation-panel" aria-label="Диалог">
             <div className="message-list">
               {isSearchChats ? (
@@ -1221,7 +1777,18 @@ export default function App() {
                     className={`message-row ${message.role === "user" ? "message-row-user" : "message-row-assistant"}`}
                   >
                     <div className={`message-bubble message-bubble-${message.role}`}>
-                      <p>{message.text}</p>
+                      {message.role === "assistant" ? (
+                        <MarkdownRenderer
+                          text={message.text}
+                          getCitationDocId={(num) => llmSearchResponse.citations.find((c) => c.id === num)?.doc_id ?? ""}
+                          onCitationClick={handleCitationClick}
+                          onCitationHover={handleCitationHover}
+                          onCitationLeave={handleCitationLeave}
+                          hoveredCitationNum={hoveredCitationNum}
+                        />
+                      ) : (
+                        <p>{message.text}</p>
+                      )}
                     </div>
                   </article>
                 ))
@@ -1257,32 +1824,37 @@ export default function App() {
               </button>
             </form>
           </div>
-
-          {contextOpen ? (
-            <aside className="context-panel" aria-label="Панель контекста">
-              <div className="context-panel-header">
-                <h2>Материалы</h2>
-                <button
-                  aria-label="Закрыть панель контекста"
-                  className="context-close"
-                  type="button"
-                  onClick={() => setContextOpen(false)}
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-
-              <div className="context-panel-body">
-
-                <section className="context-card">
-                  <h3>Граф знаний</h3>
-                  <p>Место для сущностей, связанных узлов и виджетов исследования графа.</p>
-                </section>
-              </div>
-            </aside>
-          ) : null}
         </section>
+
+        <aside className="context-panel" aria-label="Панель контекста">
+          <div className="context-panel-header">
+            <h2>Материалы</h2>
+            <button
+              aria-label="Закрыть панель контекста"
+              className="context-close"
+              type="button"
+              onClick={() => setContextOpen(false)}
+            >
+              <Icon name="close" />
+            </button>
+          </div>
+
+          <div className="context-panel-body">
+            {activeKnowledgeContext ? (
+              <ContextPanelContent context={activeKnowledgeContext} onOpenGraph={() => setGraphFullscreenOpen(true)} hoveredDocId={hoveredDocId} onDocumentHover={handleDocumentHover} onDocumentLeave={handleDocumentLeave} />
+            ) : (
+              <section className="context-empty-state">
+                <h3>Граф знаний не загружен</h3>
+                <p>Выберите чат в истории, чтобы загрузить mock-ответ LLM вместе с metadata для графа знаний.</p>
+              </section>
+            )}
+          </div>
+        </aside>
       </main>
+
+      {graphFullscreenOpen && activeKnowledgeContext ? (
+        <KnowledgeGraphModal context={activeKnowledgeContext} onClose={() => setGraphFullscreenOpen(false)} />
+      ) : null}
     </div>
   );
 }
