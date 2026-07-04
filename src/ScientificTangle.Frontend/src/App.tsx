@@ -1698,7 +1698,7 @@ export default function App() {
             ) : null}
             <div className="chat-list" role="list">
               {pinnedChatItems.map((chat) => {
-                const isActive = activeChatId === chat.id;
+                const isActive = activeNav === "chat" && activeChatId === chat.id;
 
                 return (
                   <button
@@ -1726,7 +1726,7 @@ export default function App() {
             ) : null}
             <div className="chat-list" role="list">
               {recentChatItems.map((chat) => {
-                const isActive = activeChatId === chat.id;
+                const isActive = activeNav === "chat" && activeChatId === chat.id;
 
                 return (
                   <button
@@ -1908,26 +1908,28 @@ export default function App() {
               {chatRequestError ? <p className="inline-status">{chatRequestError}</p> : null}
             </div>
 
-            <form
-              className="composer"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleSubmitMessage();
-              }}
-            >
-              <textarea
-                aria-label="Message input"
-                className="composer-input"
-                placeholder="Введите сообщение"
-                rows={1}
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={handleComposerKeyDown}
-              />
-              <button aria-label="Отправить сообщение" className="composer-submit" disabled={!canSend} type="submit">
-                <Icon name="send" />
-              </button>
-            </form>
+            {!isSearchChats ? (
+              <form
+                className="composer"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleSubmitMessage();
+                }}
+              >
+                <textarea
+                  aria-label="Message input"
+                  className="composer-input"
+                  placeholder="Введите сообщение"
+                  rows={1}
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={handleComposerKeyDown}
+                />
+                <button aria-label="Отправить сообщение" className="composer-submit" disabled={!canSend} type="submit">
+                  <Icon name="send" />
+                </button>
+              </form>
+            ) : null}
           </div>
         </section>
 
