@@ -24,7 +24,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpGet("check-email")]
     [AllowAnonymous]
-    public async Task<ActionResult<CheckEmailAvailabilityResponse>> CheckEmailAvailability([FromQuery] string email)
+    public async Task<ActionResult<CheckEmailAvailabilityResponse>> CheckEmailAvailability([FromQuery] string? email)
     {
         var normalizedEmail = NormalizeEmail(email);
         if (string.IsNullOrWhiteSpace(normalizedEmail))
@@ -140,8 +140,8 @@ public sealed class AuthController : ControllerBase
         request.RoleName = request.RoleName.Trim();
     }
 
-    private static string NormalizeEmail(string email)
-        => email.Trim().ToLowerInvariant();
+    private static string NormalizeEmail(string? email)
+        => email?.Trim().ToLowerInvariant() ?? string.Empty;
 
     private void AddIdentityErrors(IdentityResult result)
     {
