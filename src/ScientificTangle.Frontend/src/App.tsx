@@ -71,8 +71,8 @@ const roleOptions: RoleOption[] = [
 ];
 
 const navItems: NavItem[] = [
-  { id: "new", label: "New chat", icon: "spark" },
-  { id: "search", label: "Search chats", icon: "search" },
+  { id: "new", label: "Новый чат", icon: "spark" },
+  { id: "search", label: "Поиск чатов", icon: "search" },
 ];
 
 const pinnedChats: ChatItem[] = [
@@ -108,10 +108,10 @@ const messages: Message[] = [
 ];
 
 const promptSuggestions = [
-  "Summarize nickel production risks",
-  "Compare processing scenarios",
-  "Draft knowledge graph entities",
-  "Prepare metallurgical questions",
+  "Суммировать риски производства никеля",
+  "Сравнить сценарии переработки",
+  "Подготовить сущности графа знаний",
+  "Сформулировать вопросы по металлургии",
 ];
 
 const initialLoginForm: LoginFormState = {
@@ -803,11 +803,11 @@ export default function App() {
   const dashboardActivities = overview?.activities ?? [];
   const welcomeTitle = useMemo(() => {
     if (isSearchChats) {
-      return "Search chats";
+      return "Поиск чатов";
     }
 
     if (isNewChat) {
-      return "New chat";
+      return "Новый чат";
     }
 
     return overview?.productName ?? activeChat.title;
@@ -836,7 +836,7 @@ export default function App() {
     <div className="app-shell">
       {isMobile && mobileSidebarOpen ? (
         <button
-          aria-label="Close sidebar"
+          aria-label="Закрыть боковую панель"
           className="sidebar-overlay"
           type="button"
           onClick={() => setMobileSidebarOpen(false)}
@@ -845,14 +845,14 @@ export default function App() {
 
       <aside
         className={sidebarClassName}
-        aria-label="Navigation and chat history"
+          aria-label="Навигация и история чатов"
         onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
         onTouchStart={(event) => handleTouchStart(event.changedTouches[0]?.clientX ?? 0)}
       >
         <div className="sidebar-top">
           <div className="sidebar-brand">
             <button
-              aria-label={isMobile ? "Close menu" : sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+              aria-label={isMobile ? "Закрыть меню" : sidebarExpanded ? "Свернуть боковую панель" : "Развернуть боковую панель"}
               className="sidebar-toggle"
               type="button"
               onClick={handleToggleSidebar}
@@ -863,7 +863,7 @@ export default function App() {
             {sidebarExpanded ? (
               <div className="sidebar-brand-text">
                 <strong>Scientific Tangle</strong>
-                <span>Research workspace</span>
+                <span>Исследовательская среда</span>
               </div>
             ) : null}
           </div>
@@ -895,7 +895,7 @@ export default function App() {
           <section className="chat-group" aria-labelledby="pinned-chats-heading">
             {sidebarExpanded ? (
               <h2 className="chat-group-title" id="pinned-chats-heading">
-                Pinned
+                Закреплённые
               </h2>
             ) : null}
             <div className="chat-list" role="list">
@@ -923,7 +923,7 @@ export default function App() {
           <section className="chat-group" aria-labelledby="recent-chats-heading">
             {sidebarExpanded ? (
               <h2 className="chat-group-title" id="recent-chats-heading">
-                Recent
+                Недавние
               </h2>
             ) : null}
             <div className="chat-list" role="list">
@@ -986,7 +986,7 @@ export default function App() {
           <div className="main-header-left">
             {isMobile ? (
               <button
-                aria-label="Open menu"
+                aria-label="Открыть меню"
                 className="mobile-menu-button"
                 type="button"
                 onClick={() => setMobileSidebarOpen(true)}
@@ -996,7 +996,7 @@ export default function App() {
             ) : null}
 
             <div>
-              <p className="main-header-kicker">Workspace</p>
+              <p className="main-header-kicker">Рабочая область</p>
               <h1>{welcomeTitle}</h1>
             </div>
           </div>
@@ -1007,27 +1007,27 @@ export default function App() {
             type="button"
             onClick={() => setContextOpen((value) => !value)}
           >
-            Context
+            Контекст
           </button>
         </header>
 
         <section className={`workspace ${contextOpen ? "workspace-with-context" : ""}`}>
-          <div className="conversation-panel" aria-label="Conversation">
+          <div className="conversation-panel" aria-label="Диалог">
             {overviewError ? <div className="inline-status">{overviewError}</div> : null}
 
             <div className="message-list">
               {isSearchChats ? (
-                <section className="search-chat-view" aria-label="Search chats">
+                <section className="search-chat-view" aria-label="Поиск чатов">
                   <div className="search-chat-panel">
                     <div className="search-chat-heading">
-                      <h2>Search chats</h2>
-                      <p>Find a previous conversation by title.</p>
+                      <h2>Поиск чатов</h2>
+                      <p>Найдите предыдущий диалог по названию.</p>
                     </div>
                     <label className="search-chat-field">
                       <Icon name="search" />
                       <input
-                        aria-label="Search chats"
-                        placeholder="Search chats..."
+                        aria-label="Поиск чатов"
+                        placeholder="Поиск чатов..."
                         type="search"
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
@@ -1047,17 +1047,17 @@ export default function App() {
                           </button>
                         ))
                       ) : (
-                        <p className="search-chat-empty">No chats found</p>
+                        <p className="search-chat-empty">Чаты не найдены</p>
                       )}
                     </div>
                   </div>
                 </section>
               ) : isNewChat ? (
-                <section className="empty-chat" aria-label="New chat suggestions">
+                <section className="empty-chat" aria-label="Подсказки для нового чата">
                   <div className="empty-chat-mark">
                     <Icon name="spark" />
                   </div>
-                  <h2>What can I help with?</h2>
+                  <h2>Чем могу помочь?</h2>
                   <div className="prompt-grid">
                     {promptSuggestions.map((suggestion) => (
                       <button key={suggestion} className="prompt-card" type="button" onClick={() => setDraft(suggestion)}>
@@ -1084,23 +1084,23 @@ export default function App() {
               <textarea
                 aria-label="Message input"
                 className="composer-input"
-                placeholder="Write a message"
+                placeholder="Введите сообщение"
                 rows={1}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
               />
-              <button aria-label="Send message" className="composer-submit" disabled={!canSend} type="submit">
+              <button aria-label="Отправить сообщение" className="composer-submit" disabled={!canSend} type="submit">
                 <Icon name="send" />
               </button>
             </form>
           </div>
 
           {contextOpen ? (
-            <aside className="context-panel" aria-label="Context panel">
+            <aside className="context-panel" aria-label="Панель контекста">
               <div className="context-panel-header">
-                <h2>References</h2>
+                <h2>Материалы</h2>
                 <button
-                  aria-label="Close context panel"
+                  aria-label="Закрыть панель контекста"
                   className="context-close"
                   type="button"
                   onClick={() => setContextOpen(false)}
@@ -1112,7 +1112,7 @@ export default function App() {
               <div className="context-panel-body">
                 {dashboardActivities.length > 0 ? (
                   <section className="context-card">
-                    <h3>Recent activity</h3>
+                    <h3>Недавняя активность</h3>
                     <div className="activity-list">
                       {dashboardActivities.map((activity) => (
                         <div key={`${activity.category}-${activity.title}`} className="activity-item">
@@ -1126,8 +1126,8 @@ export default function App() {
                 ) : null}
 
                 <section className="context-card">
-                  <h3>Knowledge graph</h3>
-                  <p>Reserved for entities, connected nodes, and graph exploration widgets.</p>
+                  <h3>Граф знаний</h3>
+                  <p>Место для сущностей, связанных узлов и виджетов исследования графа.</p>
                 </section>
               </div>
             </aside>
