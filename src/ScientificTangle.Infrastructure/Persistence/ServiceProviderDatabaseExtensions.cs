@@ -45,6 +45,26 @@ public static class ServiceProviderDatabaseExtensions
             """, cancellationToken);
 
         await dbContext.Database.ExecuteSqlRawAsync("""
+            DO $$
+            BEGIN
+                IF to_regclass('public."Chats"') IS NOT NULL THEN
+                    ALTER TABLE "Chats"
+                    ADD COLUMN IF NOT EXISTS "RepresentedKnowledgeGraphNodeIdsJson" text NOT NULL DEFAULT '[]';
+                END IF;
+            END $$;
+            """, cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync("""
+            DO $$
+            BEGIN
+                IF to_regclass('public."Chats"') IS NOT NULL THEN
+                    ALTER TABLE "Chats"
+                    ADD COLUMN IF NOT EXISTS "KnowledgeContextJson" jsonb NULL;
+                END IF;
+            END $$;
+            """, cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync("""
             INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
             SELECT '20260704160000_AddChatKnowledgeGraphNodeIds', '8.0.8'
             WHERE EXISTS (
@@ -57,6 +77,22 @@ public static class ServiceProviderDatabaseExtensions
               AND NOT EXISTS (
                   SELECT 1 FROM "__EFMigrationsHistory"
                   WHERE "MigrationId" = '20260704160000_AddChatKnowledgeGraphNodeIds'
+              );
+            """, cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+            SELECT '20260704223000_AddChatKnowledgeContext', '8.0.8'
+            WHERE EXISTS (
+                  SELECT 1
+                  FROM information_schema.columns
+                  WHERE table_schema = 'public'
+                    AND table_name = 'Chats'
+                    AND column_name = 'KnowledgeContextJson'
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM "__EFMigrationsHistory"
+                  WHERE "MigrationId" = '20260704223000_AddChatKnowledgeContext'
               );
             """, cancellationToken);
     }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ScientificTangle.Core.KnowledgeGraph;
 
 namespace ScientificTangle.Core.Chats;
 
@@ -33,6 +34,8 @@ public sealed class Chat
     public DateTime LastActivityAtUtc { get; private set; }
 
     public string RepresentedKnowledgeGraphNodeIdsJson { get; private set; } = "[]";
+
+    public string? KnowledgeContextJson { get; private set; }
 
     public IReadOnlyCollection<string> RepresentedKnowledgeGraphNodeIds
     {
@@ -74,6 +77,12 @@ public sealed class Chat
             .ToList();
 
         RepresentedKnowledgeGraphNodeIdsJson = JsonSerializer.Serialize(distinctNodeIds);
+    }
+
+    public void SetKnowledgeContext(ChatKnowledgeContext context)
+    {
+        KnowledgeContextJson = JsonSerializer.Serialize(context);
+        SetRepresentedKnowledgeGraphNodeIds(context.RepresentedNodeIds);
     }
 
     public static string BuildTitle(string firstMessageText)

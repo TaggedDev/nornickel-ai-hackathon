@@ -5,8 +5,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ScientificTangle.Application.Chats;
+using ScientificTangle.Application.KnowledgeGraph;
 using ScientificTangle.Infrastructure.Chats;
 using ScientificTangle.Infrastructure.Identity;
+using ScientificTangle.Infrastructure.KnowledgeGraph;
 using ScientificTangle.Infrastructure.Persistence;
 
 namespace ScientificTangle.Infrastructure;
@@ -21,6 +23,8 @@ public static class DependencyInjection
 
         services.AddDbContext<ScientificTangleIdentityDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IChatService, EfChatService>();
+        services.Configure<GraphRagOptions>(configuration.GetSection(GraphRagOptions.SectionName));
+        services.AddHttpClient<IKnowledgeGraphSearchClient, GraphRagSearchClient>();
 
         services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
         {

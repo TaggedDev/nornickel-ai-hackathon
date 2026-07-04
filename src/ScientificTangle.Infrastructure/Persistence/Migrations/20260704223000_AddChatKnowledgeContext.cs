@@ -7,25 +7,24 @@ namespace ScientificTangle.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
     [DbContext(typeof(ScientificTangleIdentityDbContext))]
-    [Migration("20260704160000_AddChatKnowledgeGraphNodeIds")]
-    public partial class AddChatKnowledgeGraphNodeIds : Migration
+    [Migration("20260704223000_AddChatKnowledgeContext")]
+    public partial class AddChatKnowledgeContext : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
-                name: "RepresentedKnowledgeGraphNodeIdsJson",
+                name: "KnowledgeContextJson",
                 table: "Chats",
-                type: "text",
-                nullable: false,
-                defaultValue: "[]");
+                type: "jsonb",
+                nullable: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "RepresentedKnowledgeGraphNodeIdsJson",
+                name: "KnowledgeContextJson",
                 table: "Chats");
         }
     }

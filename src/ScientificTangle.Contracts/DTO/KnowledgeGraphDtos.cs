@@ -20,6 +20,7 @@ public sealed record KnowledgeGraphEdgeDto(
     IReadOnlyDictionary<string, string> Properties);
 
 public sealed record ReferencedDocumentDto(
+    int CitationId,
     string Id,
     string Title,
     string Snippet,

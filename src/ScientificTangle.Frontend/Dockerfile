@@ -5,7 +5,6 @@ WORKDIR /app/src/ScientificTangle.Frontend
 RUN npm ci
 WORKDIR /app
 COPY src/ ./src/
-COPY mock-data/ ./mock-data/
 WORKDIR /app/src/ScientificTangle.Frontend
 RUN npm run build
 

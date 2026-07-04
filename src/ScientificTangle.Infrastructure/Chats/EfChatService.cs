@@ -1,6 +1,10 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using ScientificTangle.Application.Chats;
+using ScientificTangle.Application.KnowledgeGraph;
 using ScientificTangle.Core.Chats;
+using ScientificTangle.Core.KnowledgeGraph;
 using ScientificTangle.Infrastructure.Persistence;
 
 namespace ScientificTangle.Infrastructure.Chats;
@@ -9,10 +13,17 @@ public sealed class EfChatService : IChatService
 {
     private const int MaxTake = 100;
     private readonly ScientificTangleIdentityDbContext _dbContext;
+    private readonly IKnowledgeGraphSearchClient _knowledgeGraphSearchClient;
+    private readonly ILogger<EfChatService> _logger;
 
-    public EfChatService(ScientificTangleIdentityDbContext dbContext)
+    public EfChatService(
+        ScientificTangleIdentityDbContext dbContext,
+        IKnowledgeGraphSearchClient knowledgeGraphSearchClient,
+        ILogger<EfChatService> logger)
     {
         _dbContext = dbContext;
+        _knowledgeGraphSearchClient = knowledgeGraphSearchClient;
+        _logger = logger;
     }
 
     public async Task<ChatDetails> CreateChatWithFirstMessageAsync(string userId, string messageText,
@@ -21,12 +32,10 @@ public sealed class EfChatService : IChatService
         var now = DateTime.UtcNow;
         var chat = new Chat(userId, messageText, now);
         chat.AddMessage(ChatMessageSender.User, messageText, now);
-
-        await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
-        chat.AddMessage(ChatMessageSender.Assistant, "Mocked AI Answer", DateTime.UtcNow);
-        chat.SetRepresentedKnowledgeGraphNodeIds(MockKnowledgeContext.Create().RepresentedNodeIds);
-
         _dbContext.Chats.Add(chat);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await AddAssistantAnswerAsync(chat, messageText, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return await BuildDetailsAsync(chat.Id, userId, null, MaxTake, cancellationToken) ??
@@ -79,12 +88,11 @@ public sealed class EfChatService : IChatService
         }
 
         chat.AddMessage(ChatMessageSender.User, messageText, DateTime.UtcNow);
-
-        await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
-        chat.AddMessage(ChatMessageSender.Assistant, "Mocked AI Answer", DateTime.UtcNow);
-        chat.SetRepresentedKnowledgeGraphNodeIds(MockKnowledgeContext.Create().RepresentedNodeIds);
-
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await AddAssistantAnswerAsync(chat, messageText, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
         return await BuildDetailsAsync(chat.Id, userId, null, MaxTake, cancellationToken);
     }
 
@@ -140,6 +148,7 @@ public sealed class EfChatService : IChatService
                 candidate.OwnerUserId,
                 candidate.CreatedAtUtc,
                 candidate.LastActivityAtUtc,
+                candidate.KnowledgeContextJson,
                 candidate.RepresentedKnowledgeGraphNodeIdsJson,
                 IsPinned = candidate.Pins.Any(pin => pin.UserId == userId)
             })
@@ -163,9 +172,47 @@ public sealed class EfChatService : IChatService
         var page = messages.Take(messagesTake).Reverse().ToList();
         var nextBeforeUtc = hasMore ? page.FirstOrDefault()?.CreatedAtUtc : null;
 
-        var knowledgeContext = MockKnowledgeContext.Create();
+        var knowledgeContext = DeserializeKnowledgeContext(chat.KnowledgeContextJson);
         return new ChatDetails(chat.Id, chat.Title, chat.IsPinned, chat.OwnerUserId == userId, chat.LastActivityAtUtc,
             chat.CreatedAtUtc, page, nextBeforeUtc, knowledgeContext);
+    }
+
+    private async Task AddAssistantAnswerAsync(Chat chat, string messageText, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var searchResult = await _knowledgeGraphSearchClient.SearchAsync(messageText, cancellationToken);
+            chat.AddMessage(ChatMessageSender.Assistant, searchResult.AnswerMarkdown, DateTime.UtcNow);
+            chat.SetKnowledgeContext(searchResult.Context);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "GraphRAG search failed for chat {ChatId}.", chat.Id);
+            chat.AddMessage(ChatMessageSender.Assistant,
+                "Не удалось получить ответ из базы знаний. Попробуйте повторить запрос позже.",
+                DateTime.UtcNow);
+        }
+    }
+
+    private static ChatKnowledgeContext? DeserializeKnowledgeContext(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<ChatKnowledgeContext>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static int NormalizeTake(int take) => Math.Clamp(take <= 0 ? 30 : take, 1, MaxTake);

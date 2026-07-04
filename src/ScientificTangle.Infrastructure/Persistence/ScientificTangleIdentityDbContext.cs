@@ -45,6 +45,7 @@ public sealed class ScientificTangleIdentityDbContext : IdentityDbContext<Applic
             entity.Property(chat => chat.CreatedAtUtc).IsRequired();
             entity.Property(chat => chat.LastActivityAtUtc).IsRequired();
             entity.Property(chat => chat.RepresentedKnowledgeGraphNodeIdsJson).HasColumnType("text").IsRequired();
+            entity.Property(chat => chat.KnowledgeContextJson).HasColumnType("jsonb");
             entity.HasIndex(chat => new { chat.OwnerUserId, chat.LastActivityAtUtc });
             entity.Metadata.FindNavigation(nameof(Chat.Messages))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             entity.Metadata.FindNavigation(nameof(Chat.Pins))!.SetPropertyAccessMode(PropertyAccessMode.Field);

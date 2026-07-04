@@ -121,6 +121,6 @@ public sealed class ChatsController : ControllerBase
         => new(edge.Id, edge.Type, edge.Source, edge.Target, edge.Properties);
 
     private static ReferencedDocumentDto Map(ReferencedDocument document)
-        => new(document.Id, document.Title, document.Snippet, document.Section, document.Page, document.Confidence,
+        => new(document.CitationId, document.Id, document.Title, document.Snippet, document.Section, document.Page, document.Confidence,
             document.Geo, document.Year, document.Language, "#");
 }
