@@ -8,13 +8,15 @@ internal static class MockKnowledgeContext
     {
         var nodes = new List<KnowledgeGraphNode>
         {
-            Node("n1", "Process", "Nickel electrowinning", "Nickel electrowinning", ["Ni EW", "electrowinning"]),
-            Node("n2", "Material", "Catholyte", "Catholyte", ["catholyte"]),
-            Node("n3", "Equipment", "Electrowinning cell", "Electrowinning cell", ["EW cell"]),
-            Node("n4", "Property", "Circulation flow rate", "Catholyte circulation flow rate", ["flow rate"],
-                new Dictionary<string, string> { ["param"] = "circulation flow rate", ["unit"] = "m3/h" }),
-            Node("n5", "Property", "Catholyte temperature", "Catholyte temperature", [],
-                new Dictionary<string, string> { ["param"] = "temperature", ["unit"] = "C" })
+            Node("n1", "Process", "электроэкстракция никеля", "электроэкстракция никеля (Ni electrowinning)",
+                ["electrowinning", "Ni EW", "ЭЭ никеля"]),
+            Node("n2", "Material", "католит", "католит", ["catholyte"]),
+            Node("n3", "Equipment", "ванна электроэкстракции", "ванна электроэкстракции",
+                ["EW cell", "электролизная ванна"]),
+            Node("n4", "Property", "скорость циркуляции", "скорость циркуляции католита", ["flow rate"],
+                new Dictionary<string, string> { ["param"] = "скорость циркуляции", ["unit"] = "м3/ч" }),
+            Node("n5", "Property", "температура католита", "температура католита", [],
+                new Dictionary<string, string> { ["param"] = "температура", ["unit"] = "°C" })
         };
 
         var edges = new List<KnowledgeGraphEdge>
@@ -23,27 +25,30 @@ internal static class MockKnowledgeContext
                 ("confidence", "0.86"), ("docId", "doc_9f2a11c7be03"), ("citationId", "1")),
             Edge("e2", "operates_at_condition", "n1", "n4",
                 ("confidence", "0.86"), ("docId", "doc_9f2a11c7be03"), ("citationId", "1"),
-                ("value", "9"), ("op", "range"), ("valueMin", "8"), ("valueMax", "10"), ("unit", "m3/h")),
+                ("snippet", "при скорости циркуляции 8-10 м3/ч на ванну..."),
+                ("value", "9"), ("op", "range"), ("valueMin", "8"), ("valueMax", "10"), ("unit", "м3/ч")),
             Edge("e3", "operates_at_condition", "n1", "n4",
                 ("confidence", "0.74"), ("docId", "doc_1c7b93df20aa"), ("citationId", "3"),
-                ("value", "13.5"), ("op", "range"), ("valueMin", "12"), ("valueMax", "15"), ("unit", "m3/h")),
+                ("snippet", "увеличение скорости циркуляции до 12-15 м3/ч на ванну..."),
+                ("value", "13.5"), ("op", "range"), ("valueMin", "12"), ("valueMax", "15"), ("unit", "м3/ч")),
             Edge("e4", "operates_at_condition", "n1", "n5",
                 ("confidence", "0.79"), ("docId", "doc_4d8e60a1f592"), ("citationId", "2"),
-                ("value", "62.5"), ("op", "range"), ("valueMin", "60"), ("valueMax", "65"), ("unit", "C")),
+                ("snippet", "поддерживать температуру в пределах 60-65 °C..."),
+                ("value", "62.5"), ("op", "range"), ("valueMin", "60"), ("valueMax", "65"), ("unit", "°C")),
             Edge("e5", "produces_output", "n3", "n2",
                 ("confidence", "0.79"), ("docId", "doc_4d8e60a1f592"), ("citationId", "2")),
             Edge("e6", "contradicts", "e2", "e3",
-                ("topic", "optimal catholyte circulation flow rate"),
-                ("reason", "Numeric optimum differs: 8-10 vs 12-15 m3/h"))
+                ("topic", "оптимальная скорость циркуляции католита"),
+                ("reason", "числовое расхождение оптимума: 8-10 vs 12-15 м3/ч"))
         };
 
         var documents = new List<ReferencedDocument>
         {
             new(
                 "doc_9f2a11c7be03",
-                "Nickel electrowinning. Electrolyte composition influence",
-                "Catholyte is supplied through the lower distribution collector; 8-10 m3/h per cell gives an even nickel concentration near the cathode.",
-                "3.2 Electrolyte circulation",
+                "Электроэкстракция никеля. Влияние состава электролита",
+                "Подача католита осуществляется через нижний распределительный коллектор; при скорости циркуляции 8-10 м3/ч на ванну достигается равномерное распределение концентрации никеля у поверхности катода.",
+                "3.2 Организация циркуляции электролита",
                 12,
                 0.86,
                 "world",
@@ -51,9 +56,9 @@ internal static class MockKnowledgeContext
                 "ru"),
             new(
                 "doc_4d8e60a1f592",
-                "OIP-05-2019 Cu EW parameters",
-                "Side recirculation through overflow pockets with an external heat exchanger keeps temperature within 60-65 C.",
-                "2.4 Cell thermal mode",
+                "ОИП-05-2019 Параметры Cu EW",
+                "Боковая рециркуляция электролита через переливные карманы с выносным теплообменником позволяет поддерживать температуру в пределах 60-65 °C без локальных перегревов.",
+                "2.4 Тепловой режим ванн",
                 8,
                 0.79,
                 "world",
@@ -61,9 +66,9 @@ internal static class MockKnowledgeContext
                 "ru"),
             new(
                 "doc_1c7b93df20aa",
-                "Review. Global practice of electric refining",
-                "High-current-density lines recommend circulation up to 12-15 m3/h per cell to prevent near-electrode depletion.",
-                "4.1 Cell hydrodynamics",
+                "Обзор. Мировая практика электрического рафинирования черновых медных анодов",
+                "Для линий с повышенной плотностью тока рекомендуется увеличение скорости циркуляции до 12-15 м3/ч на ванну для предотвращения обеднения приэлектродного слоя.",
+                "4.1 Гидродинамика ванны",
                 21,
                 0.74,
                 "world",

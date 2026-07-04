@@ -8,6 +8,7 @@ import {
   register,
   type ValidationErrors,
 } from "./shared/api/auth";
+import searchCatholyteMock from "../../../mock-data/search-catholyte.mock.json";
 
 type NavItem = {
   id: string;
@@ -33,6 +34,7 @@ type KnowledgeGraphNode = {
   label: string;
   canonicalName: string;
   aliases: string[];
+  properties: Record<string, unknown>;
   x: number;
   y: number;
 };
@@ -42,6 +44,8 @@ type KnowledgeGraphEdge = {
   type: string;
   source: string;
   target: string;
+  label: string;
+  properties: Record<string, unknown>;
 };
 
 type ReferencedDocument = {
@@ -52,6 +56,7 @@ type ReferencedDocument = {
   page: number;
   confidence: number;
   year: number;
+  language: string;
   downloadUrl: string;
 };
 
@@ -62,6 +67,40 @@ type ChatKnowledgeContext = {
   };
   documents: ReferencedDocument[];
   representedNodeIds: string[];
+};
+
+type MockSearchResponse = {
+  query: string;
+  answer_md: string;
+  citations: Array<{
+    id: number;
+    doc_id: string;
+    title: string;
+    snippet: string;
+    section: string;
+    page: number;
+    confidence: number;
+    year: number;
+    lang: string;
+  }>;
+  subgraph: {
+    nodes: Array<{
+      id: string;
+      type: KnowledgeGraphNode["type"];
+      label: string;
+      canonical_name: string;
+      aliases: string[];
+      props: Record<string, unknown>;
+    }>;
+    edges: Array<{
+      id: string;
+      type: string;
+      source: string;
+      target: string;
+      props: Record<string, unknown>;
+    }>;
+  };
+  meta: Record<string, unknown>;
 };
 
 type AppRoute = "/" | "/auth" | "/access-denied";
@@ -143,97 +182,71 @@ const messages: Message[] = [
   },
 ];
 
-const mockKnowledgeContext: ChatKnowledgeContext = {
-  graph: {
-    nodes: [
-      {
-        id: "n1",
-        type: "Process",
-        label: "Nickel electrowinning",
-        canonicalName: "Nickel electrowinning",
-        aliases: ["Ni EW", "electrowinning"],
-        x: 420,
-        y: 235,
-      },
-      {
-        id: "n2",
-        type: "Material",
-        label: "Catholyte",
-        canonicalName: "Catholyte",
-        aliases: ["catholyte"],
-        x: 205,
-        y: 170,
-      },
-      {
-        id: "n3",
-        type: "Equipment",
-        label: "EW cell",
-        canonicalName: "Electrowinning cell",
-        aliases: ["electrolytic cell"],
-        x: 210,
-        y: 355,
-      },
-      {
-        id: "n4",
-        type: "Property",
-        label: "Flow rate",
-        canonicalName: "Catholyte circulation flow rate",
-        aliases: ["8-10 m3/h", "12-15 m3/h"],
-        x: 650,
-        y: 170,
-      },
-      {
-        id: "n5",
-        type: "Property",
-        label: "Temperature",
-        canonicalName: "Catholyte temperature",
-        aliases: ["60-65 C"],
-        x: 650,
-        y: 355,
-      },
-    ],
-    edges: [
-      { id: "e1", type: "uses_material", source: "n1", target: "n2" },
-      { id: "e2", type: "operates_at_condition", source: "n1", target: "n4" },
-      { id: "e3", type: "operates_at_condition", source: "n1", target: "n4" },
-      { id: "e4", type: "operates_at_condition", source: "n1", target: "n5" },
-      { id: "e5", type: "produces_output", source: "n3", target: "n2" },
-    ],
-  },
-  documents: [
-    {
-      id: "doc_9f2a11c7be03",
-      title: "Nickel electrowinning. Electrolyte composition influence",
-      snippet: "Catholyte supply through a lower distribution collector gives even concentration near the cathode.",
-      section: "3.2 Electrolyte circulation",
-      page: 12,
-      confidence: 0.86,
-      year: 2019,
-      downloadUrl: "#",
-    },
-    {
-      id: "doc_4d8e60a1f592",
-      title: "OIP-05-2019 Cu EW parameters",
-      snippet: "Side recirculation through overflow pockets stabilizes the 60-65 C operating temperature.",
-      section: "2.4 Cell thermal mode",
-      page: 8,
-      confidence: 0.79,
-      year: 2019,
-      downloadUrl: "#",
-    },
-    {
-      id: "doc_1c7b93df20aa",
-      title: "Review. Global practice of electric refining",
-      snippet: "High-current-density lines recommend circulation up to 12-15 m3/h per cell.",
-      section: "4.1 Cell hydrodynamics",
-      page: 21,
-      confidence: 0.74,
-      year: 2021,
-      downloadUrl: "#",
-    },
-  ],
-  representedNodeIds: ["n1", "n2", "n3", "n4", "n5"],
+const llmSearchResponse = searchCatholyteMock as MockSearchResponse;
+
+const edgeTypeLabels: Record<string, string> = {
+  uses_material: "использует материал",
+  operates_at_condition: "условие работы",
+  produces_output: "производит результат",
+  described_in: "описано в",
+  validated_by: "подтверждено",
+  contradicts: "противоречит",
 };
+
+const graphNodeLayout: Record<string, { x: number; y: number }> = {
+  n1: { x: 420, y: 235 },
+  n2: { x: 205, y: 170 },
+  n3: { x: 210, y: 355 },
+  n4: { x: 650, y: 170 },
+  n5: { x: 650, y: 355 },
+};
+
+function buildKnowledgeContextFromLlmResponse(response: MockSearchResponse): ChatKnowledgeContext {
+  const nodes = response.subgraph.nodes.map((node, index) => {
+    const fallbackAngle = (Math.PI * 2 * index) / Math.max(response.subgraph.nodes.length, 1);
+    const layout = graphNodeLayout[node.id] ?? {
+      x: 420 + Math.cos(fallbackAngle) * 230,
+      y: 235 + Math.sin(fallbackAngle) * 135,
+    };
+
+    return {
+      id: node.id,
+      type: node.type,
+      label: node.label,
+      canonicalName: node.canonical_name,
+      aliases: node.aliases,
+      properties: node.props,
+      x: layout.x,
+      y: layout.y,
+    };
+  });
+
+  return {
+    graph: {
+      nodes,
+      edges: response.subgraph.edges.map((edge) => ({
+        id: edge.id,
+        type: edge.type,
+        source: edge.source,
+        target: edge.target,
+        label: edgeTypeLabels[edge.type] ?? edge.type,
+        properties: edge.props,
+      })),
+    },
+    documents: response.citations.map((citation) => ({
+      id: citation.doc_id,
+      title: citation.title,
+      snippet: citation.snippet,
+      section: citation.section,
+      page: citation.page,
+      confidence: citation.confidence,
+      year: citation.year,
+      language: citation.lang,
+      downloadUrl: "#",
+    })),
+    representedNodeIds: nodes.map((node) => node.id),
+  };
+}
 
 const promptSuggestions = [
   "Суммировать риски производства никеля",
@@ -651,7 +664,7 @@ function KnowledgeGraphCanvas({
               <g key={edge.id} className={`graph-edge ${isActive ? "is-active" : ""}`}>
                 <line x1={source.x} x2={target.x} y1={source.y} y2={target.y} />
                 <text x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 6}>
-                  {edge.type.replace(/_/g, " ")}
+                  {edge.label}
                 </text>
               </g>
             );
@@ -685,7 +698,7 @@ function KnowledgeGraphCanvas({
       {activeNode ? (
         <div className="graph-tooltip" style={{ borderColor: getNodeColor(activeNode.type) }}>
           <strong>{activeNode.label}</strong>
-          <span>{activeNode.type}</span>
+          <span>{activeNode.canonicalName}</span>
         </div>
       ) : null}
     </div>
@@ -701,19 +714,19 @@ function ContextPanelContent({
 }) {
   return (
     <>
-      <section className="graph-preview-section" aria-label="Knowledge graph preview">
+      <section className="graph-preview-section" aria-label="Превью графа знаний">
         <div className="graph-preview-header">
-          <h3>Knowledge graph</h3>
-          <button aria-label="Open full screen" className="graph-icon-button" title="Open full screen" type="button" onClick={onOpenGraph}>
+          <h3>Граф знаний</h3>
+          <button aria-label="Открыть на весь экран" className="graph-icon-button" title="Открыть на весь экран" type="button" onClick={onOpenGraph}>
             <Icon name="expand" />
           </button>
         </div>
         <KnowledgeGraphCanvas graph={context.graph} />
       </section>
 
-      <section className="document-section" aria-label="Referenced documents">
+      <section className="document-section" aria-label="Документы-источники">
         <div className="document-section-header">
-          <h3>Referenced documents</h3>
+          <h3>Документы-источники</h3>
           <span>{context.documents.length}</span>
         </div>
         <div className="document-list">
@@ -721,7 +734,7 @@ function ContextPanelContent({
             <a key={document.id} className="document-item" href={document.downloadUrl}>
               <span className="document-title">{document.title}</span>
               <span className="document-meta">
-                {document.section} · p. {document.page} · {Math.round(document.confidence * 100)}%
+                {document.section} · стр. {document.page} · {Math.round(document.confidence * 100)}% · {document.year}
               </span>
               <span className="document-snippet">{document.snippet}</span>
             </a>
@@ -741,13 +754,13 @@ function KnowledgeGraphModal({
 }) {
   return (
     <div className="graph-modal-backdrop" role="presentation" onClick={onClose}>
-      <section className="graph-modal" aria-label="Knowledge graph full screen" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <section className="graph-modal" aria-label="Граф знаний на весь экран" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="graph-modal-header">
           <div>
-            <h2>Knowledge graph</h2>
-            <p>{context.representedNodeIds.length} represented nodes</p>
+            <h2>Граф знаний</h2>
+            <p>{context.representedNodeIds.length} узлов из metadata ответа LLM</p>
           </div>
-          <button aria-label="Close graph" className="context-close" type="button" onClick={onClose}>
+          <button aria-label="Закрыть граф" className="context-close" type="button" onClick={onClose}>
             <Icon name="close" />
           </button>
         </div>
@@ -1094,6 +1107,7 @@ export default function App() {
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [graphFullscreenOpen, setGraphFullscreenOpen] = useState(false);
+  const [chatKnowledgeContexts, setChatKnowledgeContexts] = useState<Record<string, ChatKnowledgeContext>>({});
 
   useEffect(() => {
     function handleRouteChange() {
@@ -1172,6 +1186,10 @@ export default function App() {
   function handleSelectChat(chatId: string) {
     setActiveNav("chat");
     setActiveChatId(chatId);
+    setChatKnowledgeContexts((value) => ({
+      ...value,
+      [chatId]: value[chatId] ?? buildKnowledgeContextFromLlmResponse(llmSearchResponse),
+    }));
     if (isMobile) {
       setMobileSidebarOpen(false);
     }
@@ -1214,7 +1232,13 @@ export default function App() {
     ? allChats.filter((chat) => chat.title.toLowerCase().includes(normalizedSearchQuery))
     : allChats;
   const profileLabel = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "User";
-  const activeKnowledgeContext = mockKnowledgeContext;
+  const activeKnowledgeContext = chatKnowledgeContexts[activeChatId];
+  const activeMessages: Message[] = activeKnowledgeContext
+    ? [
+        { id: "mock-query", role: "user", text: llmSearchResponse.query },
+        { id: "mock-answer", role: "assistant", text: llmSearchResponse.answer_md },
+      ]
+    : messages;
   const welcomeTitle = useMemo(() => {
     if (isSearchChats) {
       return "Поиск чатов";
@@ -1479,7 +1503,7 @@ export default function App() {
                   </div>
                 </section>
               ) : (
-                messages.map((message) => (
+                activeMessages.map((message) => (
                   <article
                     key={message.id}
                     className={`message-row ${message.role === "user" ? "message-row-user" : "message-row-assistant"}`}
@@ -1522,14 +1546,21 @@ export default function App() {
               </div>
 
               <div className="context-panel-body">
-                <ContextPanelContent context={activeKnowledgeContext} onOpenGraph={() => setGraphFullscreenOpen(true)} />
+                {activeKnowledgeContext ? (
+                  <ContextPanelContent context={activeKnowledgeContext} onOpenGraph={() => setGraphFullscreenOpen(true)} />
+                ) : (
+                  <section className="context-empty-state">
+                    <h3>Граф знаний не загружен</h3>
+                    <p>Выберите чат в истории, чтобы загрузить mock-ответ LLM вместе с metadata для графа знаний.</p>
+                  </section>
+                )}
               </div>
             </aside>
           ) : null}
         </section>
       </main>
 
-      {graphFullscreenOpen ? (
+      {graphFullscreenOpen && activeKnowledgeContext ? (
         <KnowledgeGraphModal context={activeKnowledgeContext} onClose={() => setGraphFullscreenOpen(false)} />
       ) : null}
     </div>

@@ -472,6 +472,7 @@ path {
 .message-bubble p {
   margin: 0;
   color: var(--text-main);
+  white-space: pre-wrap;
 }
 
 .empty-chat {
@@ -753,6 +754,22 @@ path {
 
 .context-card p {
   color: var(--text-muted);
+}
+
+.context-empty-state {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1rem;
+}
+
+.context-empty-state h3,
+.context-empty-state p {
+  margin: 0;
+}
+
+.context-empty-state p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 .graph-preview-section {
