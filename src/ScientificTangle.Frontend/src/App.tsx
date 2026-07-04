@@ -107,6 +107,13 @@ const messages: Message[] = [
   },
 ];
 
+const promptSuggestions = [
+  "Summarize nickel production risks",
+  "Compare processing scenarios",
+  "Draft knowledge graph entities",
+  "Prepare metallurgical questions",
+];
+
 const initialLoginForm: LoginFormState = {
   email: "",
   password: "",
@@ -285,6 +292,11 @@ function Icon({ name }: { name: IconName }) {
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       ) : null}
+      {name === "send" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M4 12l16-8-5 16-3-7-8-1z" />
+        </svg>
+      ) : null}
       {name === "logout" ? (
         <svg viewBox="0 0 24 24">
           <path d="M10 17l5-5-5-5M15 12H4M20 4v16" />
@@ -309,6 +321,7 @@ type IconName =
   | "profile"
   | "chevron"
   | "close"
+  | "send"
   | "logout";
 
 function AuthScreen({
@@ -628,6 +641,7 @@ export default function App() {
   const [activeNav, setActiveNav] = useState("new");
   const [activeChatId, setActiveChatId] = useState("r1");
   const [draft, setDraft] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
@@ -742,6 +756,7 @@ export default function App() {
   }
 
   function handleSelectChat(chatId: string) {
+    setActiveNav("chat");
     setActiveChatId(chatId);
     if (isMobile) {
       setMobileSidebarOpen(false);
@@ -777,10 +792,27 @@ export default function App() {
 
   const allChats = [...pinnedChats, ...recentChats];
   const activeChat = allChats.find((chat) => chat.id === activeChatId) ?? recentChats[0];
+  const isNewChat = activeNav === "new";
+  const isSearchChats = activeNav === "search";
+  const canSend = draft.trim().length > 0;
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const searchResults = normalizedSearchQuery
+    ? allChats.filter((chat) => chat.title.toLowerCase().includes(normalizedSearchQuery))
+    : allChats;
   const profileLabel = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "User";
   const dashboardMetrics = overview?.metrics ?? [];
   const dashboardActivities = overview?.activities ?? [];
-  const welcomeTitle = useMemo(() => overview?.productName ?? activeChat.title, [activeChat.title, overview?.productName]);
+  const welcomeTitle = useMemo(() => {
+    if (isSearchChats) {
+      return "Search chats";
+    }
+
+    if (isNewChat) {
+      return "New chat";
+    }
+
+    return overview?.productName ?? activeChat.title;
+  }, [activeChat.title, isNewChat, isSearchChats, overview?.productName]);
 
   if (route === "/auth") {
     return (
@@ -997,16 +1029,68 @@ export default function App() {
             {overviewError ? <div className="inline-status">{overviewError}</div> : null}
 
             <div className="message-list">
-              {messages.map((message) => (
-                <article
-                  key={message.id}
-                  className={`message-row ${message.role === "user" ? "message-row-user" : "message-row-assistant"}`}
-                >
-                  <div className={`message-bubble message-bubble-${message.role}`}>
-                    <p>{message.text}</p>
+              {isSearchChats ? (
+                <section className="search-chat-view" aria-label="Search chats">
+                  <div className="search-chat-panel">
+                    <div className="search-chat-heading">
+                      <h2>Search chats</h2>
+                      <p>Find a previous conversation by title.</p>
+                    </div>
+                    <label className="search-chat-field">
+                      <Icon name="search" />
+                      <input
+                        aria-label="Search chats"
+                        placeholder="Search chats..."
+                        type="search"
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                      />
+                    </label>
+                    <div className="search-chat-results" role="list">
+                      {searchResults.length > 0 ? (
+                        searchResults.map((chat) => (
+                          <button
+                            key={chat.id}
+                            className="search-chat-result"
+                            type="button"
+                            onClick={() => handleSelectChat(chat.id)}
+                          >
+                            <Icon name="chat" />
+                            <span>{chat.title}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="search-chat-empty">No chats found</p>
+                      )}
+                    </div>
                   </div>
-                </article>
-              ))}
+                </section>
+              ) : isNewChat ? (
+                <section className="empty-chat" aria-label="New chat suggestions">
+                  <div className="empty-chat-mark">
+                    <Icon name="spark" />
+                  </div>
+                  <h2>What can I help with?</h2>
+                  <div className="prompt-grid">
+                    {promptSuggestions.map((suggestion) => (
+                      <button key={suggestion} className="prompt-card" type="button" onClick={() => setDraft(suggestion)}>
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : (
+                messages.map((message) => (
+                  <article
+                    key={message.id}
+                    className={`message-row ${message.role === "user" ? "message-row-user" : "message-row-assistant"}`}
+                  >
+                    <div className={`message-bubble message-bubble-${message.role}`}>
+                      <p>{message.text}</p>
+                    </div>
+                  </article>
+                ))
+              )}
             </div>
 
             <form className="composer" onSubmit={(event) => event.preventDefault()}>
@@ -1018,8 +1102,8 @@ export default function App() {
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
               />
-              <button className="composer-submit" type="submit">
-                Send
+              <button aria-label="Send message" className="composer-submit" disabled={!canSend} type="submit">
+                <Icon name="send" />
               </button>
             </form>
           </div>
