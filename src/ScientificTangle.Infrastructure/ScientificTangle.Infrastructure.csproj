@@ -7,7 +7,9 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\ScientificTangle.Application\ScientificTangle.Application.csproj" />
         <ProjectReference Include="..\ScientificTangle.Contracts\ScientificTangle.Contracts.csproj" />
+        <ProjectReference Include="..\ScientificTangle.Core\ScientificTangle.Core.csproj" />
     </ItemGroup>
 
     <ItemGroup>

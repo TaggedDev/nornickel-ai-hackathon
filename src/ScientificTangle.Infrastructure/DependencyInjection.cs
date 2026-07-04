@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ScientificTangle.Application.Chats;
+using ScientificTangle.Infrastructure.Chats;
 using ScientificTangle.Infrastructure.Identity;
 using ScientificTangle.Infrastructure.Persistence;
 
@@ -18,6 +20,7 @@ public static class DependencyInjection
                                    "Connection string 'ScientificTangleDatabase' was not found.");
 
         services.AddDbContext<ScientificTangleIdentityDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddScoped<IChatService, EfChatService>();
 
         services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
         {

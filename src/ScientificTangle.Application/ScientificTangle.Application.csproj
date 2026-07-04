@@ -6,4 +6,8 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
+    <ItemGroup>
+        <ProjectReference Include="..\ScientificTangle.Core\ScientificTangle.Core.csproj" />
+    </ItemGroup>
+
 </Project>
