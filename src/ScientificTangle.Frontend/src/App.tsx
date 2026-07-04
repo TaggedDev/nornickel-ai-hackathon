@@ -39,7 +39,7 @@ type Message = {
 
 type KnowledgeGraphNode = {
   id: string;
-  type: "Material" | "Process" | "Equipment" | "Property" | "Experiment" | "Publication" | "Expert" | "Facility";
+  type: string;
   label: string;
   canonicalName: string;
   aliases: string[];
@@ -148,10 +148,68 @@ const edgeTypeLabels: Record<string, string> = {
   contradicts: "противоречит",
 };
 
+const nodeTypeAliases: Record<string, string> = {
+  equipment: "Equipment",
+  entity: "Entity",
+  experiment: "Experiment",
+  expert: "Expert",
+  facility: "Facility",
+  material: "Material",
+  method: "Process",
+  process: "Process",
+  property: "Property",
+  publication: "Publication",
+};
+
+const genericNodeTypes = new Set(["", "entity", "node", "thing"]);
+
+function normalizeNodeType(type: string | null | undefined) {
+  const normalized = type?.trim() ?? "";
+  return nodeTypeAliases[normalized.toLowerCase()] ?? normalized;
+}
+
+function isGenericNodeType(type: string | null | undefined) {
+  return genericNodeTypes.has((type ?? "").trim().toLowerCase());
+}
+
+function inferNodeTypesFromGraph(graph: ChatKnowledgeContextResponse["graph"]) {
+  const inferredTypes = new Map<string, string>();
+
+  for (const edge of graph.edges) {
+    if (edge.type === "uses_material") {
+      inferredTypes.set(edge.source, inferredTypes.get(edge.source) ?? "Process");
+      inferredTypes.set(edge.target, "Material");
+    }
+
+    if (edge.type === "operates_at_condition") {
+      inferredTypes.set(edge.source, inferredTypes.get(edge.source) ?? "Process");
+      inferredTypes.set(edge.target, "Property");
+    }
+
+    if (edge.type === "produces_output") {
+      inferredTypes.set(edge.source, inferredTypes.get(edge.source) ?? "Process");
+      inferredTypes.set(edge.target, inferredTypes.get(edge.target) ?? "Material");
+    }
+
+    if (edge.type === "described_in") {
+      inferredTypes.set(edge.target, inferredTypes.get(edge.target) ?? "Publication");
+    }
+
+    if (edge.type === "validated_by") {
+      inferredTypes.set(edge.target, inferredTypes.get(edge.target) ?? "Experiment");
+    }
+  }
+
+  return inferredTypes;
+}
+
 function buildKnowledgeContextFromApiResponse(context: ChatKnowledgeContextResponse): ChatKnowledgeContext {
+  const inferredNodeTypes = inferNodeTypesFromGraph(context.graph);
   const nodes = context.graph.nodes.map((node) => ({
       id: node.id,
-      type: node.type as KnowledgeGraphNode["type"],
+      type: isGenericNodeType(node.type)
+        ? inferredNodeTypes.get(node.id) ?? "Entity"
+        : normalizeNodeType(node.type),
       label: node.label,
       canonicalName: node.canonicalName,
       aliases: node.aliases,
@@ -507,19 +565,58 @@ type IconName =
   | "plus"
   | "minus";
 
-const nodeTypeColors: Record<KnowledgeGraphNode["type"], string> = {
-  Material: "#2dd4bf",
-  Process: "#60a5fa",
-  Equipment: "#f59e0b",
-  Property: "#a78bfa",
-  Experiment: "#fb7185",
-  Publication: "#34d399",
-  Expert: "#f472b6",
-  Facility: "#facc15",
+type NodeTypePalette = {
+  borderColor: string;
+  backgroundColor: string;
 };
 
-function getNodeColor(type: KnowledgeGraphNode["type"]) {
-  return nodeTypeColors[type] ?? "#d1d5db";
+const fallbackNodeTypePalette: NodeTypePalette = {
+  borderColor: "#fb7185",
+  backgroundColor: "#4a1f2a",
+};
+
+const nodeTypePalettes: Record<string, NodeTypePalette> = {
+  Entity: {
+    borderColor: "#94a3b8",
+    backgroundColor: "#273244",
+  },
+  Material: {
+    borderColor: "#2dd4bf",
+    backgroundColor: "#123f3b",
+  },
+  Process: {
+    borderColor: "#60a5fa",
+    backgroundColor: "#172f52",
+  },
+  Equipment: {
+    borderColor: "#f59e0b",
+    backgroundColor: "#4b3210",
+  },
+  Property: {
+    borderColor: "#a78bfa",
+    backgroundColor: "#332457",
+  },
+  Experiment: {
+    borderColor: "#fb7185",
+    backgroundColor: "#4d1f2a",
+  },
+  Publication: {
+    borderColor: "#34d399",
+    backgroundColor: "#123d2d",
+  },
+  Expert: {
+    borderColor: "#f472b6",
+    backgroundColor: "#4a1f39",
+  },
+  Facility: {
+    borderColor: "#facc15",
+    backgroundColor: "#493d12",
+  },
+};
+
+function getNodeTypePalette(type: string) {
+  const normalizedType = normalizeNodeType(type);
+  return nodeTypePalettes[normalizedType] ?? fallbackNodeTypePalette;
 }
 
 function KnowledgeGraphCanvas({
@@ -548,7 +645,7 @@ function KnowledgeGraphCanvas({
           data: {
             id: node.id,
             label: node.label,
-            color: getNodeColor(node.type),
+            ...getNodeTypePalette(node.type),
           },
         })),
         ...graph.edges.map((edge) => ({
@@ -580,9 +677,9 @@ function KnowledgeGraphCanvas({
         {
           selector: "node",
           style: {
-            "background-color": "data(color)",
-            "background-opacity": 0.18,
-            "border-color": "data(color)",
+            "background-color": "data(backgroundColor)",
+            "background-opacity": 0.92,
+            "border-color": "data(borderColor)",
             "border-width": 2,
             color: "#f8fafc",
             "font-family": "Inter, Segoe UI, system-ui, sans-serif",
@@ -696,7 +793,7 @@ function KnowledgeGraphCanvas({
       <div ref={containerRef} aria-label="Knowledge graph" className="graph-cytoscape" />
 
       {activeNode ? (
-        <div className="graph-tooltip" style={{ borderColor: getNodeColor(activeNode.type) }}>
+        <div className="graph-tooltip" style={{ borderColor: getNodeTypePalette(activeNode.type).borderColor }}>
           <strong>{activeNode.label}</strong>
           <span>{activeNode.canonicalName}</span>
         </div>
