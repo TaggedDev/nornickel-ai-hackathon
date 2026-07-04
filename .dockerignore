@@ -1,0 +1,9 @@
+node_modules
+.git
+.gitignore
+bin
+obj
+.vs
+.vscode
+*.md
+.DS_Store
