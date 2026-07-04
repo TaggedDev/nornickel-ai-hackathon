@@ -800,7 +800,6 @@ export default function App() {
     ? allChats.filter((chat) => chat.title.toLowerCase().includes(normalizedSearchQuery))
     : allChats;
   const profileLabel = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "User";
-  const dashboardMetrics = overview?.metrics ?? [];
   const dashboardActivities = overview?.activities ?? [];
   const welcomeTitle = useMemo(() => {
     if (isSearchChats) {
@@ -1014,18 +1013,6 @@ export default function App() {
 
         <section className={`workspace ${contextOpen ? "workspace-with-context" : ""}`}>
           <div className="conversation-panel" aria-label="Conversation">
-            {dashboardMetrics.length > 0 ? (
-              <section className="overview-grid" aria-label="Dashboard overview">
-                {dashboardMetrics.map((metric) => (
-                  <article key={metric.label} className="overview-card">
-                    <strong>{metric.value}</strong>
-                    <h2>{metric.label}</h2>
-                    <p>{metric.description}</p>
-                  </article>
-                ))}
-              </section>
-            ) : null}
-
             {overviewError ? <div className="inline-status">{overviewError}</div> : null}
 
             <div className="message-list">
