@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ScientificTangle.Web.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/dashboard")]
 public class DashboardController : ControllerBase
 {

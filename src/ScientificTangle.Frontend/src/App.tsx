@@ -1,4 +1,14 @@
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  ApiError,
+  type AuthUser,
+  checkEmailAvailability,
+  login,
+  logout,
+  register,
+  type ValidationErrors,
+} from "./shared/api/auth";
+import { fetchOverview, type DashboardOverview } from "./shared/api/dashboard";
 
 type NavItem = {
   id: string;
@@ -18,24 +28,47 @@ type Message = {
   text: string;
 };
 
-type IconName =
-  | "spark"
-  | "search"
-  | "library"
-  | "projects"
-  | "scheduled"
-  | "apps"
-  | "more"
-  | "panel"
-  | "chat"
-  | "menu"
-  | "profile"
-  | "chevron"
-  | "close";
+type AppRoute = "/" | "/auth" | "/access-denied";
+type AuthMode = "login" | "register";
+type AuthViewState = "idle" | "loading";
 
+type LoginFormState = {
+  email: string;
+  password: string;
+  rememberMe: boolean;
+};
+
+type RegisterFormState = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  roleName: string;
+};
+
+type RoleOption = {
+  value: string;
+  label: string;
+};
+
+type AppErrorState = {
+  message: string;
+  fieldErrors: ValidationErrors;
+};
+
+const USER_STORAGE_KEY = "scientific-tangle-auth-user";
 const SIDEBAR_STORAGE_KEY = "scientific-tangle-sidebar-mode";
 const CONTEXT_STORAGE_KEY = "scientific-tangle-context-open";
 const MOBILE_BREAKPOINT = 768;
+
+const roleOptions: RoleOption[] = [
+  { value: "Researcher", label: "Исследователь" },
+  { value: "Analyst", label: "Аналитик" },
+  { value: "ProjectManager", label: "Руководитель проекта" },
+  { value: "Administrator", label: "Администратор" },
+  { value: "ExternalPartner", label: "Внешний партнёр" },
+];
 
 const navItems: NavItem[] = [
   { id: "new", label: "New chat", icon: "spark" },
@@ -74,6 +107,90 @@ const messages: Message[] = [
   },
 ];
 
+const initialLoginForm: LoginFormState = {
+  email: "",
+  password: "",
+  rememberMe: true,
+};
+
+const initialRegisterForm: RegisterFormState = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  password: "",
+  confirmPassword: "",
+  roleName: roleOptions[0]?.value ?? "",
+};
+
+function readStorageFlag(key: string, expectedValue: string, fallback: boolean) {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  return window.localStorage.getItem(key) === expectedValue;
+}
+
+function readStoredUser(): AuthUser | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const rawValue = window.localStorage.getItem(USER_STORAGE_KEY);
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawValue) as AuthUser;
+  } catch {
+    window.localStorage.removeItem(USER_STORAGE_KEY);
+    return null;
+  }
+}
+
+function persistUser(user: AuthUser | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!user) {
+    window.localStorage.removeItem(USER_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+}
+
+function normalizePath(pathname: string): AppRoute {
+  if (pathname === "/auth" || pathname === "/access-denied") {
+    return pathname;
+  }
+
+  return "/";
+}
+
+function navigate(path: AppRoute) {
+  const nextPath = normalizePath(path);
+  if (window.location.pathname !== nextPath) {
+    window.history.pushState({}, "", nextPath);
+  }
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+function getFieldErrors(errors?: ValidationErrors, fieldName?: string) {
+  if (!errors || !fieldName) {
+    return [];
+  }
+
+  return errors[fieldName] ?? [];
+}
+
+function getInitials(user: AuthUser) {
+  const firstLetter = user.firstName.trim()[0] ?? "";
+  const lastLetter = user.lastName.trim()[0] ?? "";
+  return `${firstLetter}${lastLetter}`.toUpperCase();
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === "undefined") {
@@ -93,14 +210,6 @@ function useIsMobile() {
   }, []);
 
   return isMobile;
-}
-
-function readStorageFlag(key: string, expectedValue: string, fallback: boolean) {
-  if (typeof window === "undefined") {
-    return fallback;
-  }
-
-  return window.localStorage.getItem(key) === expectedValue;
 }
 
 function Icon({ name }: { name: IconName }) {
@@ -156,6 +265,11 @@ function Icon({ name }: { name: IconName }) {
           <path d="M6 7h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H10l-4 3v-3H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" />
         </svg>
       ) : null}
+      {name === "menuDots" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 6h.01M12 12h.01M12 18h.01" />
+        </svg>
+      ) : null}
       {name === "profile" ? (
         <svg viewBox="0 0 24 24">
           <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0" />
@@ -171,12 +285,341 @@ function Icon({ name }: { name: IconName }) {
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       ) : null}
+      {name === "logout" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M10 17l5-5-5-5M15 12H4M20 4v16" />
+        </svg>
+      ) : null}
     </span>
+  );
+}
+
+type IconName =
+  | "spark"
+  | "search"
+  | "library"
+  | "projects"
+  | "scheduled"
+  | "apps"
+  | "more"
+  | "panel"
+  | "chat"
+  | "menu"
+  | "menuDots"
+  | "profile"
+  | "chevron"
+  | "close"
+  | "logout";
+
+function AuthScreen({
+  authMode,
+  onModeChange,
+  onLoginSuccess,
+  onRegisterSuccess,
+}: {
+  authMode: AuthMode;
+  onModeChange: (mode: AuthMode) => void;
+  onLoginSuccess: (user: AuthUser) => void;
+  onRegisterSuccess: (user: AuthUser) => void;
+}) {
+  const [loginForm, setLoginForm] = useState(initialLoginForm);
+  const [registerForm, setRegisterForm] = useState(initialRegisterForm);
+  const [viewState, setViewState] = useState<AuthViewState>("idle");
+  const [errorState, setErrorState] = useState<AppErrorState | null>(null);
+  const [emailAvailabilityMessage, setEmailAvailabilityMessage] = useState<string | null>(null);
+
+  function clearErrors() {
+    setErrorState(null);
+  }
+
+  async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setViewState("loading");
+    clearErrors();
+
+    try {
+      const user = await login(loginForm);
+      onLoginSuccess(user);
+    } catch (error) {
+      setErrorState(extractAppError(error));
+    } finally {
+      setViewState("idle");
+    }
+  }
+
+  async function handleRegisterSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setViewState("loading");
+    clearErrors();
+
+    try {
+      const user = await register(registerForm);
+      onRegisterSuccess(user);
+    } catch (error) {
+      setErrorState(extractAppError(error));
+    } finally {
+      setViewState("idle");
+    }
+  }
+
+  async function handleEmailBlur() {
+    const email = registerForm.email.trim();
+    if (!email) {
+      setEmailAvailabilityMessage(null);
+      return;
+    }
+
+    try {
+      const isAvailable = await checkEmailAvailability(email);
+      setEmailAvailabilityMessage(isAvailable ? null : "Этот email уже зарегистрирован.");
+    } catch {
+      setEmailAvailabilityMessage(null);
+    }
+  }
+
+  const isBusy = viewState === "loading";
+
+  return (
+    <div className="auth-page">
+      <section className="auth-card">
+        <div className="auth-card-header">
+          <p className="auth-eyebrow">Scientific Tangle</p>
+          <h1>{authMode === "login" ? "Авторизация" : "Регистрация"}</h1>
+          <p className="auth-subtitle">
+            {authMode === "login"
+              ? "Войдите, чтобы открыть исследовательский чат и материалы проекта."
+              : "Создайте учетную запись сотрудника для доступа к системе."}
+          </p>
+        </div>
+
+        <div className="auth-switch">
+          <button
+            className={`auth-switch-button ${authMode === "login" ? "is-active" : ""}`}
+            type="button"
+            onClick={() => {
+              clearErrors();
+              onModeChange("login");
+            }}
+          >
+            Вход
+          </button>
+          <button
+            className={`auth-switch-button ${authMode === "register" ? "is-active" : ""}`}
+            type="button"
+            onClick={() => {
+              clearErrors();
+              onModeChange("register");
+            }}
+          >
+            Регистрация
+          </button>
+        </div>
+
+        {errorState ? <div className="form-error-banner">{errorState.message}</div> : null}
+
+        {authMode === "login" ? (
+          <form className="auth-form" onSubmit={handleLoginSubmit}>
+            <label className="field">
+              <span>Email</span>
+              <input
+                autoComplete="email"
+                className="text-field"
+                type="email"
+                value={loginForm.email}
+                onChange={(event) => setLoginForm((value) => ({ ...value, email: event.target.value }))}
+              />
+              {getFieldErrors(errorState?.fieldErrors, "Email").map((message) => (
+                <small key={message} className="field-error">
+                  {message}
+                </small>
+              ))}
+            </label>
+
+            <label className="field">
+              <span>Пароль</span>
+              <input
+                autoComplete="current-password"
+                className="text-field"
+                type="password"
+                value={loginForm.password}
+                onChange={(event) => setLoginForm((value) => ({ ...value, password: event.target.value }))}
+              />
+              {getFieldErrors(errorState?.fieldErrors, "Password").map((message) => (
+                <small key={message} className="field-error">
+                  {message}
+                </small>
+              ))}
+            </label>
+
+            <label className="checkbox-field">
+              <input
+                checked={loginForm.rememberMe}
+                type="checkbox"
+                onChange={(event) => setLoginForm((value) => ({ ...value, rememberMe: event.target.checked }))}
+              />
+              <span>Запомнить меня на 30 дней</span>
+            </label>
+
+            <button className="auth-submit" disabled={isBusy} type="submit">
+              {isBusy ? "Входим..." : "Войти"}
+            </button>
+
+            <p className="auth-footer">
+              Нет аккаунта?{" "}
+              <button className="auth-inline-button" type="button" onClick={() => onModeChange("register")}>
+                Регистрация
+              </button>
+            </p>
+          </form>
+        ) : (
+          <form className="auth-form" onSubmit={handleRegisterSubmit}>
+            <label className="field">
+              <span>Фамилия</span>
+              <input
+                autoComplete="family-name"
+                className="text-field"
+                maxLength={100}
+                value={registerForm.lastName}
+                onChange={(event) => setRegisterForm((value) => ({ ...value, lastName: event.target.value }))}
+              />
+              {getFieldErrors(errorState?.fieldErrors, "LastName").map((message) => (
+                <small key={message} className="field-error">
+                  {message}
+                </small>
+              ))}
+            </label>
+
+            <label className="field">
+              <span>Имя</span>
+              <input
+                autoComplete="given-name"
+                className="text-field"
+                maxLength={100}
+                value={registerForm.firstName}
+                onChange={(event) => setRegisterForm((value) => ({ ...value, firstName: event.target.value }))}
+              />
+              {getFieldErrors(errorState?.fieldErrors, "FirstName").map((message) => (
+                <small key={message} className="field-error">
+                  {message}
+                </small>
+              ))}
+            </label>
+
+            <label className="field">
+              <span>Email</span>
+              <input
+                autoComplete="email"
+                className="text-field"
+                type="email"
+                value={registerForm.email}
+                onBlur={handleEmailBlur}
+                onChange={(event) => {
+                  setEmailAvailabilityMessage(null);
+                  setRegisterForm((value) => ({ ...value, email: event.target.value }));
+                }}
+              />
+              {emailAvailabilityMessage ? <small className="field-error">{emailAvailabilityMessage}</small> : null}
+              {getFieldErrors(errorState?.fieldErrors, "Email").map((message) => (
+                <small key={message} className="field-error">
+                  {message}
+                </small>
+              ))}
+            </label>
+
+            <label className="field">
+              <span>Роль</span>
+              <select
+                className="text-field"
+                value={registerForm.roleName}
+                onChange={(event) => setRegisterForm((value) => ({ ...value, roleName: event.target.value }))}
+              >
+                {roleOptions.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+              {getFieldErrors(errorState?.fieldErrors, "RoleName").map((message) => (
+                <small key={message} className="field-error">
+                  {message}
+                </small>
+              ))}
+            </label>
+
+            <label className="field">
+              <span>Пароль</span>
+              <input
+                autoComplete="new-password"
+                className="text-field"
+                type="password"
+                value={registerForm.password}
+                onChange={(event) => setRegisterForm((value) => ({ ...value, password: event.target.value }))}
+              />
+              <small className="field-hint">Минимум 6 символов, uppercase, lowercase и цифра.</small>
+              {getFieldErrors(errorState?.fieldErrors, "Password").map((message) => (
+                <small key={message} className="field-error">
+                  {message}
+                </small>
+              ))}
+            </label>
+
+            <label className="field">
+              <span>Подтверждение пароля</span>
+              <input
+                autoComplete="new-password"
+                className="text-field"
+                type="password"
+                value={registerForm.confirmPassword}
+                onChange={(event) =>
+                  setRegisterForm((value) => ({ ...value, confirmPassword: event.target.value }))
+                }
+              />
+              {getFieldErrors(errorState?.fieldErrors, "ConfirmPassword").map((message) => (
+                <small key={message} className="field-error">
+                  {message}
+                </small>
+              ))}
+            </label>
+
+            <button className="auth-submit" disabled={isBusy} type="submit">
+              {isBusy ? "Регистрируем..." : "Зарегистрироваться"}
+            </button>
+
+            <p className="auth-footer">
+              Уже есть аккаунт?{" "}
+              <button className="auth-inline-button" type="button" onClick={() => onModeChange("login")}>
+                Войти
+              </button>
+            </p>
+          </form>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function AccessDeniedScreen() {
+  return (
+    <div className="auth-page">
+      <section className="auth-card auth-card-compact">
+        <p className="auth-eyebrow">Scientific Tangle</p>
+        <h1>Доступ запрещен</h1>
+        <p className="auth-subtitle">
+          У вашей учетной записи нет прав для просмотра этого раздела.
+        </p>
+        <button className="auth-submit" type="button" onClick={() => navigate("/")}>
+          Вернуться в приложение
+        </button>
+      </section>
+    </div>
   );
 }
 
 export default function App() {
   const isMobile = useIsMobile();
+  const [route, setRoute] = useState<AppRoute>(() => normalizePath(window.location.pathname));
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => readStoredUser());
   const [sidebarExpanded, setSidebarExpanded] = useState(() =>
     readStorageFlag(SIDEBAR_STORAGE_KEY, "expanded", true),
   );
@@ -186,6 +629,18 @@ export default function App() {
   const [activeChatId, setActiveChatId] = useState("r1");
   const [draft, setDraft] = useState("");
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  useEffect(() => {
+    function handleRouteChange() {
+      setRoute(normalizePath(window.location.pathname));
+    }
+
+    window.addEventListener("popstate", handleRouteChange);
+    return () => window.removeEventListener("popstate", handleRouteChange);
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarExpanded ? "expanded" : "collapsed");
@@ -196,10 +651,79 @@ export default function App() {
   }, [contextOpen]);
 
   useEffect(() => {
+    persistUser(currentUser);
+  }, [currentUser]);
+
+  useEffect(() => {
     if (!isMobile) {
       setMobileSidebarOpen(false);
     }
   }, [isMobile]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setOverview(null);
+      if (route !== "/auth") {
+        navigate("/auth");
+      }
+      return;
+    }
+
+    if (route === "/auth") {
+      navigate("/");
+      return;
+    }
+
+    let isActive = true;
+    setOverviewError(null);
+    void fetchOverview()
+      .then((payload) => {
+        if (!isActive) {
+          return;
+        }
+
+        setOverview(payload);
+      })
+      .catch((error: Error) => {
+        if (!isActive) {
+          return;
+        }
+
+        if (error.message.includes("401")) {
+          setCurrentUser(null);
+          navigate("/auth");
+          return;
+        }
+
+        if (error.message.includes("403")) {
+          navigate("/access-denied");
+          return;
+        }
+
+        setOverviewError("Не удалось загрузить данные панели.");
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentUser, route]);
+
+  function handleAuthSuccess(user: AuthUser) {
+    setCurrentUser(user);
+    setOverviewError(null);
+    navigate("/");
+  }
+
+  async function handleLogout() {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setCurrentUser(null);
+      setIsLoggingOut(false);
+      navigate("/auth");
+    }
+  }
 
   function handleToggleSidebar() {
     if (isMobile) {
@@ -253,6 +777,29 @@ export default function App() {
 
   const allChats = [...pinnedChats, ...recentChats];
   const activeChat = allChats.find((chat) => chat.id === activeChatId) ?? recentChats[0];
+  const profileLabel = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "User";
+  const dashboardMetrics = overview?.metrics ?? [];
+  const dashboardActivities = overview?.activities ?? [];
+  const welcomeTitle = useMemo(() => overview?.productName ?? activeChat.title, [activeChat.title, overview?.productName]);
+
+  if (route === "/auth") {
+    return (
+      <AuthScreen
+        authMode={authMode}
+        onLoginSuccess={handleAuthSuccess}
+        onModeChange={setAuthMode}
+        onRegisterSuccess={handleAuthSuccess}
+      />
+    );
+  }
+
+  if (route === "/access-denied") {
+    return <AccessDeniedScreen />;
+  }
+
+  if (!currentUser) {
+    return null;
+  }
 
   return (
     <div className="app-shell">
@@ -372,27 +919,34 @@ export default function App() {
         </div>
 
         <div className="sidebar-profile">
-          <button
-            aria-label={!sidebarExpanded ? "User profile" : undefined}
-            className="profile-button"
-            title={!sidebarExpanded ? "User profile" : undefined}
-            type="button"
-          >
-            <span className="profile-avatar">
-              <Icon name="profile" />
-            </span>
-            {sidebarExpanded ? (
-              <>
-                <span className="profile-meta">
-                  <strong>Denis</strong>
-                  <span>Исследователь</span>
-                </span>
-                <span className="profile-more">
-                  <Icon name="chevron" />
-                </span>
-              </>
-            ) : null}
-          </button>
+          <div className="profile-menu">
+            <button
+              aria-label={!sidebarExpanded ? profileLabel : undefined}
+              className="profile-button"
+              title={!sidebarExpanded ? profileLabel : undefined}
+              type="button"
+            >
+              <span className="profile-avatar profile-avatar-text">{getInitials(currentUser)}</span>
+              {sidebarExpanded ? (
+                <>
+                  <span className="profile-meta">
+                    <strong>{profileLabel}</strong>
+                    <span>{currentUser.roleDisplayName}</span>
+                  </span>
+                  <span className="profile-more">
+                    <Icon name="menuDots" />
+                  </span>
+                </>
+              ) : null}
+            </button>
+
+            <div className="profile-menu-popover">
+              <button className="profile-menu-action" disabled={isLoggingOut} type="button" onClick={handleLogout}>
+                <Icon name="logout" />
+                <span>{isLoggingOut ? "Выходим..." : "Разлогиниться"}</span>
+              </button>
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -411,8 +965,8 @@ export default function App() {
             ) : null}
 
             <div>
-              <p className="main-header-kicker">Active chat</p>
-              <h1>{activeChat.title}</h1>
+              <p className="main-header-kicker">Workspace</p>
+              <h1>{welcomeTitle}</h1>
             </div>
           </div>
 
@@ -428,6 +982,20 @@ export default function App() {
 
         <section className={`workspace ${contextOpen ? "workspace-with-context" : ""}`}>
           <div className="conversation-panel" aria-label="Conversation">
+            {dashboardMetrics.length > 0 ? (
+              <section className="overview-grid" aria-label="Dashboard overview">
+                {dashboardMetrics.map((metric) => (
+                  <article key={metric.label} className="overview-card">
+                    <strong>{metric.value}</strong>
+                    <h2>{metric.label}</h2>
+                    <p>{metric.description}</p>
+                  </article>
+                ))}
+              </section>
+            ) : null}
+
+            {overviewError ? <div className="inline-status">{overviewError}</div> : null}
+
             <div className="message-list">
               {messages.map((message) => (
                 <article
@@ -471,10 +1039,20 @@ export default function App() {
               </div>
 
               <div className="context-panel-body">
-                <section className="context-card">
-                  <h3>Answer references</h3>
-                  <p>Reserved for citations, source excerpts, and supporting links.</p>
-                </section>
+                {dashboardActivities.length > 0 ? (
+                  <section className="context-card">
+                    <h3>Recent activity</h3>
+                    <div className="activity-list">
+                      {dashboardActivities.map((activity) => (
+                        <div key={`${activity.category}-${activity.title}`} className="activity-item">
+                          <strong>{activity.category}</strong>
+                          <p>{activity.title}</p>
+                          <span>{activity.timestamp}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
 
                 <section className="context-card">
                   <h3>Knowledge graph</h3>
@@ -487,4 +1065,18 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+function extractAppError(error: unknown): AppErrorState {
+  if (error instanceof ApiError) {
+    return {
+      message: error.message,
+      fieldErrors: error.errors ?? {},
+    };
+  }
+
+  return {
+    message: "Произошла ошибка. Попробуйте еще раз.",
+    fieldErrors: {},
+  };
 }
