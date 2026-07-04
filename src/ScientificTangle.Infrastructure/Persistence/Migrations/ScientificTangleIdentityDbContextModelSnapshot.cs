@@ -143,6 +143,9 @@ namespace ScientificTangle.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("LastActivityAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("KnowledgeContextJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("OwnerUserId")
                         .IsRequired()
                         .HasMaxLength(450)

@@ -8,6 +8,14 @@ import {
   register,
   type ValidationErrors,
 } from "./shared/api/auth";
+import {
+  addChatMessage,
+  type ChatDetailsResponse,
+  createChat,
+  getChat,
+  getChats,
+  type ChatKnowledgeContextResponse,
+} from "./shared/api/chats";
 import searchCatholyteMock from "../../../mock-data/search-catholyte.mock.json";
 
 type NavItem = {
@@ -49,14 +57,15 @@ type KnowledgeGraphEdge = {
 };
 
 type ReferencedDocument = {
+  citationId: number;
   id: string;
   title: string;
   snippet: string;
-  section: string;
-  page: number;
+  section: string | null;
+  page: number | null;
   confidence: number;
-  year: number;
-  language: string;
+  year: number | null;
+  language: string | null;
   downloadUrl: string;
 };
 
@@ -275,6 +284,7 @@ function buildKnowledgeContextFromLlmResponse(response: MockSearchResponse): Cha
       })),
     },
     documents: response.citations.map((citation) => ({
+      citationId: citation.id,
       id: citation.doc_id,
       title: citation.title,
       snippet: citation.snippet,
@@ -287,6 +297,66 @@ function buildKnowledgeContextFromLlmResponse(response: MockSearchResponse): Cha
     })),
     representedNodeIds: nodes.map((node) => node.id),
   };
+}
+
+function buildKnowledgeContextFromApiResponse(context: ChatKnowledgeContextResponse): ChatKnowledgeContext {
+  const nodes = context.graph.nodes.map((node, index) => {
+    const fallbackAngle = (Math.PI * 2 * index) / Math.max(context.graph.nodes.length, 1);
+    const layout = graphNodeLayout[node.id] ?? {
+      x: 420 + Math.cos(fallbackAngle) * 230,
+      y: 235 + Math.sin(fallbackAngle) * 135,
+    };
+
+    return {
+      id: node.id,
+      type: node.type as KnowledgeGraphNode["type"],
+      label: node.label,
+      canonicalName: node.canonicalName,
+      aliases: node.aliases,
+      properties: node.properties,
+      x: layout.x,
+      y: layout.y,
+    };
+  });
+
+  return {
+    graph: {
+      nodes,
+      edges: context.graph.edges.map((edge) => ({
+        id: edge.id,
+        type: edge.type,
+        source: edge.source,
+        target: edge.target,
+        label: edgeTypeLabels[edge.type] ?? edge.type,
+        properties: edge.properties,
+      })),
+    },
+    documents: context.documents.map((document) => ({
+      citationId: document.citationId,
+      id: document.id,
+      title: document.title,
+      snippet: document.snippet,
+      section: document.section,
+      page: document.page,
+      confidence: document.confidence,
+      year: document.year,
+      language: document.language,
+      downloadUrl: document.downloadUrl,
+    })),
+    representedNodeIds: context.representedNodeIds,
+  };
+}
+
+function mapChatMessages(chat: ChatDetailsResponse): Message[] {
+  return chat.messages.map((message) => ({
+    id: message.id,
+    role: message.sender.toLowerCase() === "user" ? "user" : "assistant",
+    text: message.text,
+  }));
+}
+
+function isServerChatId(chatId: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chatId);
 }
 
 const promptSuggestions = [
@@ -1286,6 +1356,8 @@ export default function App() {
   const [recentChatItems, setRecentChatItems] = useState<ChatItem[]>(initialRecentChats);
   const [chatMessagesById, setChatMessagesById] = useState<Record<string, Message[]>>(initialChatMessagesById);
   const [draft, setDraft] = useState("");
+  const [isAnswering, setIsAnswering] = useState(false);
+  const [chatRequestError, setChatRequestError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -1336,10 +1408,38 @@ export default function App() {
 
   }, [currentUser, route]);
 
-  function createLocalChatTitle(messageText: string) {
-    const normalized = messageText.replace(/\s+/g, " ").trim();
-    return normalized.length > 54 ? `${normalized.slice(0, 54)}...` : normalized;
-  }
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadChats() {
+      try {
+        const response = await getChats();
+        if (isCancelled) {
+          return;
+        }
+
+        const chats = response.items.map((chat) => ({ id: chat.id, title: chat.title }));
+        setRecentChatItems(chats.length > 0 ? chats : initialRecentChats);
+        if (chats.length > 0 && activeNav !== "chat") {
+          setActiveChatId(chats[0].id);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setChatRequestError(extractAppError(error).message);
+        }
+      }
+    }
+
+    void loadChats();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUser]);
 
   function createMockAssistantAnswer(messageText: string) {
     return `Принял запрос: «${messageText}». Для демо я подготовлю краткий ответ и могу продолжить анализ по этой теме.`;
@@ -1347,6 +1447,7 @@ export default function App() {
 
   function handleAuthSuccess(user: AuthUser) {
     setCurrentUser(user);
+    setActiveNav("new");
     navigate("/");
   }
 
@@ -1373,7 +1474,9 @@ export default function App() {
 
   function handleDocumentHover(docId: string) {
     setHoveredDocId(docId);
-    const citationNums = llmSearchResponse.citations.filter((c) => c.doc_id === docId).map((c) => c.id);
+    const citationNums = activeKnowledgeContext?.documents
+      .filter((document) => document.id === docId)
+      .map((document) => document.citationId) ?? [];
     if (citationNums.length > 0) {
       setHoveredCitationNum(citationNums[0]);
     }
@@ -1410,78 +1513,89 @@ export default function App() {
     }
   }
 
-  function handleSelectChat(chatId: string) {
+  async function handleSelectChat(chatId: string) {
     setActiveNav("chat");
     setActiveChatId(chatId);
-    setChatKnowledgeContexts((value) => ({
-      ...value,
-      [chatId]: value[chatId] ?? buildKnowledgeContextFromLlmResponse(llmSearchResponse),
-    }));
     if (isMobile) {
       setMobileSidebarOpen(false);
     }
+
+    if (!isServerChatId(chatId)) {
+      if (!chatKnowledgeContexts[chatId] && chatId.startsWith("demo")) {
+        setChatKnowledgeContexts((value) => ({
+          ...value,
+          [chatId]: buildKnowledgeContextFromLlmResponse(llmSearchResponse),
+        }));
+      }
+      return;
+    }
+
+    if (chatMessagesById[chatId]) {
+      return;
+    }
+
+    try {
+      const chat = await getChat(chatId);
+      setChatMessagesById((messagesById) => ({
+        ...messagesById,
+        [chat.id]: mapChatMessages(chat),
+      }));
+      if (chat.knowledgeContext) {
+        setChatKnowledgeContexts((value) => ({
+          ...value,
+          [chat.id]: buildKnowledgeContextFromApiResponse(chat.knowledgeContext!),
+        }));
+      }
+    } catch (error) {
+      setChatRequestError(extractAppError(error).message);
+    }
   }
 
-  function handlePromptSubmit(text: string) {
-    const now = Date.now();
-    const targetChatId = `local-${now}`;
-    const userMessage: Message = {
-      id: `${targetChatId}-user-${now}`,
-      role: "user",
-      text,
-    };
-    const assistantMessage: Message = {
-      id: `${targetChatId}-assistant-${now}`,
-      role: "assistant",
-      text: createMockAssistantAnswer(text),
-    };
-    const newChat: ChatItem = {
-      id: targetChatId,
-      title: createLocalChatTitle(text),
-    };
-    setRecentChatItems((items) => [newChat, ...items]);
-    setChatMessagesById((messagesById) => ({
-      ...messagesById,
-      [targetChatId]: [userMessage, assistantMessage],
-    }));
-    setActiveChatId(targetChatId);
-    setActiveNav("chat");
+  async function handlePromptSubmit(text: string) {
+    await submitMessage(text);
   }
 
-  function handleSubmitMessage() {
-    const messageText = draft.trim();
+  async function handleSubmitMessage() {
+    await submitMessage(draft);
+  }
+
+  async function submitMessage(message: string) {
+    const messageText = message.trim();
     if (!messageText) {
       return;
     }
 
-    const now = Date.now();
-    const targetChatId = activeNav === "chat" ? activeChatId : `local-${now}`;
-    const userMessage: Message = {
-      id: `${targetChatId}-user-${now}`,
-      role: "user",
-      text: messageText,
-    };
-    const assistantMessage: Message = {
-      id: `${targetChatId}-assistant-${now}`,
-      role: "assistant",
-      text: createMockAssistantAnswer(messageText),
-    };
-
-    if (activeNav !== "chat") {
-      const newChat: ChatItem = {
-        id: targetChatId,
-        title: createLocalChatTitle(messageText),
-      };
-      setRecentChatItems((items) => [newChat, ...items]);
-    }
-
-    setChatMessagesById((messagesById) => ({
-      ...messagesById,
-      [targetChatId]: [...(messagesById[targetChatId] ?? []), userMessage, assistantMessage],
-    }));
-    setActiveChatId(targetChatId);
-    setActiveNav("chat");
+    setIsAnswering(true);
+    setChatRequestError(null);
     setDraft("");
+
+    try {
+      const isExistingServerChat = activeNav === "chat" && isServerChatId(activeChatId);
+      const chat = isExistingServerChat
+        ? await addChatMessage(activeChatId, messageText)
+        : await createChat(messageText);
+
+      setRecentChatItems((items) => {
+        const nextItem = { id: chat.id, title: chat.title };
+        return [nextItem, ...items.filter((item) => item.id !== chat.id)];
+      });
+      setChatMessagesById((messagesById) => ({
+        ...messagesById,
+        [chat.id]: mapChatMessages(chat),
+      }));
+      if (chat.knowledgeContext) {
+        setChatKnowledgeContexts((value) => ({
+          ...value,
+          [chat.id]: buildKnowledgeContextFromApiResponse(chat.knowledgeContext!),
+        }));
+      }
+      setActiveChatId(chat.id);
+      setActiveNav("chat");
+    } catch (error) {
+      setChatRequestError(extractAppError(error).message);
+    } finally {
+      setIsAnswering(false);
+    }
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -1490,7 +1604,7 @@ export default function App() {
     }
 
     event.preventDefault();
-    handleSubmitMessage();
+    void handleSubmitMessage();
   }
 
   function handleTouchStart(clientX: number) {
@@ -1524,7 +1638,7 @@ export default function App() {
   const activeChat = allChats.find((chat) => chat.id === activeChatId) ?? recentChatItems[0];
   const isNewChat = activeNav === "new";
   const isSearchChats = activeNav === "search";
-  const canSend = draft.trim().length > 0;
+  const canSend = draft.trim().length > 0 && !isAnswering;
   const activeMessages = activeNav === "chat" ? (chatMessagesById[activeChatId] ?? []) : [];
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const searchResults = normalizedSearchQuery
@@ -1790,7 +1904,7 @@ export default function App() {
                   <h2>Чем могу помочь?</h2>
                   <div className="prompt-grid">
                     {promptSuggestions.map((suggestion) => (
-                      <button key={suggestion} className="prompt-card" type="button" onClick={() => handlePromptSubmit(suggestion)}>
+                      <button key={suggestion} className="prompt-card" disabled={isAnswering} type="button" onClick={() => void handlePromptSubmit(suggestion)}>
                         {suggestion}
                       </button>
                     ))}
@@ -1806,7 +1920,7 @@ export default function App() {
                       {message.role === "assistant" ? (
                         <MarkdownRenderer
                           text={message.text}
-                          getCitationDocId={(num) => llmSearchResponse.citations.find((c) => c.id === num)?.doc_id ?? ""}
+                          getCitationDocId={(num) => activeKnowledgeContext?.documents.find((document) => document.citationId === num)?.id ?? ""}
                           onCitationClick={handleCitationClick}
                           onCitationHover={handleCitationHover}
                           onCitationLeave={handleCitationLeave}
@@ -1827,13 +1941,15 @@ export default function App() {
                   <p>Продолжите диалог или задайте уточнение по этой теме.</p>
                 </section>
               )}
+              {isAnswering ? <p className="inline-status">Бот готовит ответ из базы знаний...</p> : null}
+              {chatRequestError ? <p className="inline-status">{chatRequestError}</p> : null}
             </div>
 
             <form
               className="composer"
               onSubmit={(event) => {
                 event.preventDefault();
-                handleSubmitMessage();
+                void handleSubmitMessage();
               }}
             >
               <textarea
