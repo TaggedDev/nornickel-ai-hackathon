@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type PointerEvent, type WheelEvent, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type FormEvent, type PointerEvent, type ReactNode, type WheelEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
   type AuthUser,
@@ -708,9 +708,15 @@ function KnowledgeGraphCanvas({
 function ContextPanelContent({
   context,
   onOpenGraph,
+  hoveredDocId,
+  onDocumentHover,
+  onDocumentLeave,
 }: {
   context: ChatKnowledgeContext;
   onOpenGraph: () => void;
+  hoveredDocId: string | null;
+  onDocumentHover: (docId: string) => void;
+  onDocumentLeave: () => void;
 }) {
   return (
     <>
@@ -731,13 +737,20 @@ function ContextPanelContent({
         </div>
         <div className="document-list">
           {context.documents.map((document) => (
-            <a key={document.id} className="document-item" href={document.downloadUrl}>
+            <button
+              key={document.id}
+              id={`source-${document.id}`}
+              className={`document-item ${hoveredDocId === document.id ? "source-hovered" : ""}`}
+              type="button"
+              onMouseEnter={() => onDocumentHover(document.id)}
+              onMouseLeave={onDocumentLeave}
+            >
               <span className="document-title">{document.title}</span>
               <span className="document-meta">
                 {document.section} · стр. {document.page} · {Math.round(document.confidence * 100)}% · {document.year}
               </span>
               <span className="document-snippet">{document.snippet}</span>
-            </a>
+            </button>
           ))}
         </div>
       </section>
@@ -1090,6 +1103,133 @@ function AccessDeniedScreen() {
   );
 }
 
+function MarkdownRenderer({
+  text,
+  getCitationDocId,
+  onCitationClick,
+  onCitationHover,
+  onCitationLeave,
+  hoveredCitationNum,
+}: {
+  text: string;
+  getCitationDocId: (num: number) => string;
+  onCitationClick: (docId: string) => void;
+  onCitationHover: (docId: string, citationNum: number) => void;
+  onCitationLeave: () => void;
+  hoveredCitationNum: number | null;
+}) {
+  if (!text) return null;
+
+  function renderBold(text: string) {
+    const parts: ReactNode[] = [];
+    const boldRegex = /\*\*(.+?)\*\*/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let key = 0;
+
+    while ((match = boldRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      parts.push(<strong key={key++}>{match[1]}</strong>);
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+  }
+
+  function renderInline(segment: string) {
+    const parts: ReactNode[] = [];
+    const citationRegex = /\[(\d+)\]/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let key = 0;
+
+    while ((match = citationRegex.exec(segment)) !== null) {
+      const num = parseInt(match[1], 10);
+      const docId = getCitationDocId(num);
+      const isHovered = num === hoveredCitationNum;
+
+      if (match.index > lastIndex) {
+        const textBefore = segment.slice(lastIndex, match.index);
+        if (textBefore.trim()) {
+          parts.push(
+            <a
+              key={key++}
+              href="#"
+              className={`citation-text-link ${isHovered ? "is-hovered" : ""}`}
+              onClick={(e) => {
+                e.preventDefault();
+                if (docId) onCitationClick(docId);
+              }}
+              onMouseEnter={() => onCitationHover(docId, num)}
+              onMouseLeave={onCitationLeave}
+            >
+              {renderBold(textBefore)}
+            </a>
+          );
+        }
+      }
+
+      parts.push(
+        <a
+          key={key++}
+          href="#"
+          className={`citation-link ${isHovered ? "is-hovered" : ""}`}
+          onClick={(e) => {
+            e.preventDefault();
+            if (docId) onCitationClick(docId);
+          }}
+          onMouseEnter={() => onCitationHover(docId, num)}
+          onMouseLeave={onCitationLeave}
+        >
+          [{num}]
+        </a>
+      );
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < segment.length) {
+      parts.push(renderBold(segment.slice(lastIndex)));
+    }
+
+    return parts.length > 0 ? parts : segment;
+  }
+
+  const paragraphs = text.split(/\n\n+/);
+
+  return (
+    <div className="markdown-content">
+      {paragraphs.map((para, i) => {
+        const trimmed = para.trim();
+        if (!trimmed) return null;
+
+        if (/^[-*]\s/.test(trimmed)) {
+          const items = trimmed.split(/\n/).filter((line) => /^[-*]\s/.test(line));
+          return (
+            <ul key={i} style={{ margin: "0.25rem 0", paddingLeft: "1.25rem" }}>
+              {items.map((item, j) => (
+                <li key={j}>{renderInline(item.replace(/^[-*]\s/, ""))}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        return (
+          <p key={i} style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+            {renderInline(trimmed)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function App() {
   const isMobile = useIsMobile();
   const [route, setRoute] = useState<AppRoute>(() => normalizePath(window.location.pathname));
@@ -1108,6 +1248,8 @@ export default function App() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [graphFullscreenOpen, setGraphFullscreenOpen] = useState(false);
   const [chatKnowledgeContexts, setChatKnowledgeContexts] = useState<Record<string, ChatKnowledgeContext>>({});
+  const [hoveredDocId, setHoveredDocId] = useState<string | null>(null);
+  const [hoveredCitationNum, setHoveredCitationNum] = useState<number | null>(null);
 
   useEffect(() => {
     function handleRouteChange() {
@@ -1165,6 +1307,39 @@ export default function App() {
       setIsLoggingOut(false);
       navigate("/auth");
     }
+  }
+
+  function handleCitationHover(docId: string, citationNum: number) {
+    setHoveredDocId(docId);
+    setHoveredCitationNum(citationNum);
+  }
+
+  function handleCitationLeave() {
+    setHoveredDocId(null);
+    setHoveredCitationNum(null);
+  }
+
+  function handleDocumentHover(docId: string) {
+    setHoveredDocId(docId);
+    const citationNums = llmSearchResponse.citations.filter((c) => c.doc_id === docId).map((c) => c.id);
+    if (citationNums.length > 0) {
+      setHoveredCitationNum(citationNums[0]);
+    }
+  }
+
+  function handleDocumentLeave() {
+    setHoveredDocId(null);
+    setHoveredCitationNum(null);
+  }
+
+  function handleCitationClick(docId: string) {
+    setContextOpen(true);
+    setTimeout(() => {
+      const el = document.getElementById(`source-${docId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
   }
 
   function handleToggleSidebar() {
@@ -1419,7 +1594,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="main-panel">
+      <main className={`main-panel ${contextOpen ? "main-panel-with-context" : ""}`}>
         <header className="main-header">
           <div className="main-header-left">
             {isMobile ? (
@@ -1439,17 +1614,18 @@ export default function App() {
             </div>
           </div>
 
-          <button
-            aria-expanded={contextOpen}
-            className={`context-button ${contextOpen ? "is-active" : ""}`}
-            type="button"
-            onClick={() => setContextOpen((value) => !value)}
-          >
-            Контекст
-          </button>
+          {!contextOpen ? (
+            <button
+              className="context-button"
+              type="button"
+              onClick={() => setContextOpen(true)}
+            >
+              Контекст
+            </button>
+          ) : null}
         </header>
 
-        <section className={`workspace ${contextOpen ? "workspace-with-context" : ""}`}>
+        <section className="workspace">
           <div className="conversation-panel" aria-label="Диалог">
             <div className="message-list">
               {isSearchChats ? (
@@ -1509,7 +1685,18 @@ export default function App() {
                     className={`message-row ${message.role === "user" ? "message-row-user" : "message-row-assistant"}`}
                   >
                     <div className={`message-bubble message-bubble-${message.role}`}>
-                      <p>{message.text}</p>
+                      {message.role === "assistant" ? (
+                        <MarkdownRenderer
+                          text={message.text}
+                          getCitationDocId={(num) => llmSearchResponse.citations.find((c) => c.id === num)?.doc_id ?? ""}
+                          onCitationClick={handleCitationClick}
+                          onCitationHover={handleCitationHover}
+                          onCitationLeave={handleCitationLeave}
+                          hoveredCitationNum={hoveredCitationNum}
+                        />
+                      ) : (
+                        <p>{message.text}</p>
+                      )}
                     </div>
                   </article>
                 ))
@@ -1530,34 +1717,32 @@ export default function App() {
               </button>
             </form>
           </div>
-
-          {contextOpen ? (
-            <aside className="context-panel" aria-label="Панель контекста">
-              <div className="context-panel-header">
-                <h2>Материалы</h2>
-                <button
-                  aria-label="Закрыть панель контекста"
-                  className="context-close"
-                  type="button"
-                  onClick={() => setContextOpen(false)}
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-
-              <div className="context-panel-body">
-                {activeKnowledgeContext ? (
-                  <ContextPanelContent context={activeKnowledgeContext} onOpenGraph={() => setGraphFullscreenOpen(true)} />
-                ) : (
-                  <section className="context-empty-state">
-                    <h3>Граф знаний не загружен</h3>
-                    <p>Выберите чат в истории, чтобы загрузить mock-ответ LLM вместе с metadata для графа знаний.</p>
-                  </section>
-                )}
-              </div>
-            </aside>
-          ) : null}
         </section>
+
+        <aside className="context-panel" aria-label="Панель контекста">
+          <div className="context-panel-header">
+            <h2>Материалы</h2>
+            <button
+              aria-label="Закрыть панель контекста"
+              className="context-close"
+              type="button"
+              onClick={() => setContextOpen(false)}
+            >
+              <Icon name="close" />
+            </button>
+          </div>
+
+          <div className="context-panel-body">
+            {activeKnowledgeContext ? (
+              <ContextPanelContent context={activeKnowledgeContext} onOpenGraph={() => setGraphFullscreenOpen(true)} hoveredDocId={hoveredDocId} onDocumentHover={handleDocumentHover} onDocumentLeave={handleDocumentLeave} />
+            ) : (
+              <section className="context-empty-state">
+                <h3>Граф знаний не загружен</h3>
+                <p>Выберите чат в истории, чтобы загрузить mock-ответ LLM вместе с metadata для графа знаний.</p>
+              </section>
+            )}
+          </div>
+        </aside>
       </main>
 
       {graphFullscreenOpen && activeKnowledgeContext ? (
