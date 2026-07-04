@@ -1001,6 +1001,29 @@ path {
   border-color: rgba(138, 180, 248, 0.65);
 }
 
+.role-select {
+  min-height: 52px;
+  color: #ffffff;
+  background: #2f2f2f;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.role-select option {
+  color: #111827;
+  background: #ffffff;
+  white-space: normal;
+}
+
+.text-field-error {
+  border-color: #f87171;
+  background: rgba(127, 29, 29, 0.16);
+}
+
+.text-field-error:focus {
+  border-color: #fca5a5;
+}
+
 .checkbox-field {
   display: flex;
   align-items: center;
